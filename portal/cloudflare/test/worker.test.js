@@ -2353,3 +2353,98 @@ test("customers can view only subscriptions owned by their signed-in account", a
     database.close();
   }
 });
+
+test("signed-in customer checkout owns the order and resulting subscription", async () => {
+  const database = await createTestDatabase();
+  const env = { DB: new LocalD1(database) };
+  const origin = "https://app.test";
+
+  try {
+    const register = await worker.fetch(
+      new Request(`${origin}/api/account/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin },
+        body: JSON.stringify({
+          fullName: "Checkout Customer",
+          email: "checkout-customer@example.com",
+          password: "customer-test-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal(register.status, 201);
+    const { customer } = await register.json();
+
+    const login = await worker.fetch(
+      new Request(`${origin}/api/account/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin },
+        body: JSON.stringify({
+          email: "checkout-customer@example.com",
+          password: "customer-test-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+
+    const unauthenticated = await worker.fetch(
+      new Request(`${origin}/api/account/orders`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin },
+        body: JSON.stringify({
+          planId: "10-day",
+          macAddress: "02:00:00:00:00:01",
+          phoneNumber: "670000000",
+          paymentNetwork: "mtn",
+        }),
+      }),
+      env,
+    );
+    assert.equal(unauthenticated.status, 401);
+
+    const createOrder = await worker.fetch(
+      new Request(`${origin}/api/account/orders`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin, cookie },
+        body: JSON.stringify({
+          planId: "10-day",
+          macAddress: "02:00:00:00:00:01",
+          phoneNumber: "670000000",
+          paymentNetwork: "mtn",
+        }),
+      }),
+      env,
+    );
+    const orderPayload = await createOrder.json();
+    assert.equal(createOrder.status, 201);
+    const storedOrder = database
+      .prepare("SELECT customer_id, status FROM orders WHERE reference = ?")
+      .get(orderPayload.order.reference);
+    assert.equal(storedOrder.customer_id, customer.id);
+    assert.equal(storedOrder.status, "pending");
+
+    const fakeFapshi = createFakeFapshi({
+      db: new LocalD1(database),
+      clock: () => new Date("2026-10-02T12:00:00.000Z"),
+    });
+    await fakeFapshi.settleOrder({
+      orderReference: orderPayload.order.reference,
+      outcome: "successful",
+      providerTransactionId: "FAKE-ACCOUNT-CHECKOUT",
+    });
+
+    const orderId = database
+      .prepare("SELECT id FROM orders WHERE reference = ?")
+      .get(orderPayload.order.reference).id;
+    const storedSubscription = database
+      .prepare("SELECT customer_id, status FROM subscriptions WHERE order_id = ?")
+      .get(orderId);
+    assert.equal(storedSubscription.customer_id, customer.id);
+    assert.equal(storedSubscription.status, "active");
+  } finally {
+    database.close();
+  }
+});
+

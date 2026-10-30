@@ -1314,6 +1314,9 @@ test("scheduled expiry marks due subscriptions and queues one router revocation"
     .run("00000000-0000-4000-8000-000000000002", "subscription-FC-SUBSCRIPTION-EXPIRED");
   await createActiveTestSubscription(database, "FC-SUBSCRIPTION-CURRENT");
   database
+    .prepare("UPDATE subscriptions SET expires_at = ? WHERE order_id = ?")
+    .run(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), "order-FC-SUBSCRIPTION-CURRENT");
+  database
     .prepare(
       "UPDATE subscriptions SET expires_at = ? WHERE order_id = ?",
     )

@@ -1390,3 +1390,37 @@ td.muted {
     min-height: 0;
   }
 }
+
+
+.button.small {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.household-admin-panels {
+  margin-bottom: 18px;
+}
+
+.household-table-panel {
+  margin-bottom: 18px;
+}
+
+.household-table-panel .table-wrap {
+  overflow-x: auto;
+}
+
+.household-table-panel table {
+  min-width: 760px;
+}
+
+.household-table-panel .button + .button {
+  margin-left: 5px;
+}
+
+@media (max-width: 600px) {
+  .household-table-panel {
+    padding: 15px;
+  }
+}

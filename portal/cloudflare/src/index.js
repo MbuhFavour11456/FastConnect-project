@@ -7,6 +7,7 @@ import {
 } from "./fapshi.js";
 import { expireSubscriptions } from "./subscription-expiry.js";
 import { getCurrentCustomer, handleCustomerAuthRequest } from "./customer-auth.js";
+import { handleAccountAccessRequest } from "./account-access.js";
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
@@ -262,6 +263,7 @@ export default {
     const isAdminApiRoute = url.pathname.startsWith("/api/admin/");
     const isCustomerApiRoute = url.pathname.startsWith("/api/account/");
     const isAccountOrdersRoute = url.pathname === "/api/account/orders";
+    const isAccountAccessRoute = url.pathname === "/api/account/access";
 
     if (isFapshiWebhookRoute) {
       if (request.method !== "POST") {
@@ -289,6 +291,16 @@ export default {
         return await createPendingOrder(request, env.DB, customer.id);
       } catch (error) {
         console.error("Account checkout request failed:", error);
+        return jsonResponse({ error: "Service temporarily unavailable" }, 503);
+      }
+    }
+
+    if (isAccountAccessRoute) {
+      try {
+        await checkDatabase(env.DB);
+        return await handleAccountAccessRequest(request, env.DB);
+      } catch (error) {
+        console.error("Account access check failed:", error);
         return jsonResponse({ error: "Service temporarily unavailable" }, 503);
       }
     }

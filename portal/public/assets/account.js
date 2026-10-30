@@ -43,6 +43,34 @@ const formatSubscriptionDate = (value) => {
   }).format(date);
 };
 
+async function loadAccountAccess() {
+  const message = document.querySelector("#access-message");
+  const details = document.querySelector("#access-details");
+  const renewLink = document.querySelector("#renew-plan-link");
+  if (!message || !details || !renewLink) return;
+
+  try {
+    const result = await accountApi("/api/account/access");
+    if (result.canReconnect) {
+      showMessage(message, result.message, "success");
+      details.textContent = result.access?.expiresAt
+        ? `Access expires: ${formatSubscriptionDate(result.access.expiresAt)}.`
+        : "Your approved access has no scheduled expiry.";
+      renewLink.hidden = true;
+    } else {
+      showMessage(message, result.message);
+      details.textContent = "Once you choose and pay for a plan, its active period will be linked to your account.";
+      renewLink.hidden = false;
+      renewLink.href = "index.html";
+    }
+    if (result.routerConnected === false && result.canReconnect) {
+      details.textContent += " Actual Wi-Fi reconnection is not yet connected to a live router.";
+    }
+  } catch (error) {
+    showMessage(message, error.message, "error");
+  }
+}
+
 async function loadCustomerSubscriptions() {
   const container = document.querySelector("#customer-subscriptions");
   const message = document.querySelector("#subscriptions-message");
@@ -102,6 +130,7 @@ function renderCustomer(customer) {
   currentPanel.hidden = false;
   formsPanel.hidden = true;
   loadCustomerSubscriptions();
+  loadAccountAccess();
 }
 
 async function loadAccountSession() {

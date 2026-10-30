@@ -1043,10 +1043,11 @@ async function cancelAdminVoucher(request, env, db, voucherId) {
       .prepare(
         `INSERT INTO audit_logs (id, actor, action, details)
          SELECT ?, ?, 'voucher_cancelled', ?
-         WHERE EXISTS (
-           SELECT 1 FROM vouchers
-           WHERE id = ? AND status = 'cancelled' AND cancelled_at = ?
-         )`,
+         WHERE changes() = 1
+           AND EXISTS (
+             SELECT 1 FROM vouchers
+             WHERE id = ? AND status = 'cancelled' AND cancelled_at = ?
+           )`,
       )
       .bind(
         crypto.randomUUID(),

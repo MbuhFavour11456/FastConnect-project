@@ -119,14 +119,21 @@ async function createActiveTestSubscription(database, reference) {
        VALUES (?, ?, ?, 2000, 'successful', '2026-10-02T12:00:00.000Z')`,
     )
     .run(`payment-${reference}`, `order-${reference}`, `fake-${reference}`);
+  const startedAt = new Date(Date.now() - 60_000).toISOString();
+  const expiresAt = new Date(Date.now() + 10 * 86400000).toISOString();
   database
     .prepare(
       `INSERT INTO subscriptions
          (id, order_id, device_id, plan_id, status, started_at, expires_at)
-       VALUES (?, ?, ?, '10-day', 'active',
-               '2026-10-02T12:00:00.000Z', '2026-10-12T12:00:00.000Z')`,
+       VALUES (?, ?, ?, '10-day', 'active', ?, ?)`,
     )
-    .run(`subscription-${reference}`, `order-${reference}`, `device-${reference}`);
+    .run(
+      `subscription-${reference}`,
+      `order-${reference}`,
+      `device-${reference}`,
+      startedAt,
+      expiresAt,
+    );
   database
     .prepare(
       `INSERT INTO router_commands (id, subscription_id, action, status)
@@ -2448,3 +2455,80 @@ test("signed-in customer checkout owns the order and resulting subscription", as
   }
 });
 
+
+
+test("account access check allows reconnect only while account access is active", async () => {
+  const database = await createTestDatabase();
+  const env = { DB: new LocalD1(database) };
+  const origin = "https://app.test";
+
+  try {
+    const registration = await worker.fetch(
+      new Request(`${origin}/api/account/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin },
+        body: JSON.stringify({
+          fullName: "Reconnect Customer",
+          email: "reconnect@example.com",
+          password: "customer-test-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal(registration.status, 201);
+    const { customer } = await registration.json();
+
+    const unauthenticated = await worker.fetch(
+      new Request(`${origin}/api/account/access`),
+      env,
+    );
+    assert.equal(unauthenticated.status, 401);
+
+    const login = await worker.fetch(
+      new Request(`${origin}/api/account/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin },
+        body: JSON.stringify({
+          email: "reconnect@example.com",
+          password: "customer-test-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+
+    await createActiveTestSubscription(database, "FC-RECONNECT-ACTIVE");
+    database.prepare(
+      `UPDATE subscriptions
+       SET customer_id = ?
+       WHERE order_id = (SELECT id FROM orders WHERE reference = ?)`,
+    ).run(customer.id, "FC-RECONNECT-ACTIVE");
+
+    const activeResponse = await worker.fetch(
+      new Request(`${origin}/api/account/access`, { headers: { cookie } }),
+      env,
+    );
+    assert.equal(activeResponse.status, 200);
+    const active = await activeResponse.json();
+    assert.equal(active.canReconnect, true);
+    assert.equal(active.access.type, "subscription");
+    assert.equal(active.routerConnected, false);
+
+    database.prepare(
+      `UPDATE subscriptions SET expires_at = ?
+       WHERE order_id = (SELECT id FROM orders WHERE reference = ?)`,
+    ).run("2020-01-01T00:00:00.000Z", "FC-RECONNECT-ACTIVE");
+
+    const expiredResponse = await worker.fetch(
+      new Request(`${origin}/api/account/access`, { headers: { cookie } }),
+      env,
+    );
+    assert.equal(expiredResponse.status, 200);
+    const expired = await expiredResponse.json();
+    assert.equal(expired.canReconnect, false);
+    assert.equal(expired.access, null);
+  } finally {
+    database.close();
+  }
+});

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#07111d">
+	<title>FastConnect | Owner portal</title>
+	<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="admin-app">
+	<header class="admin-topbar owner-topbar">
+		<div class="admin-topbar-left">
+			<a class="brand" href="../index.html">
+				<span class="brand-mark">F</span>
+				<span class="brand-name">FastConnect</span>
+			</a>
+			<span class="owner-badge">Owner portal</span>
+		</div>
+		<div class="admin-user">
+			<strong id="admin-name">Owner</strong>
+			<button id="admin-logout" class="button secondary" type="button">Sign out</button>
+		</div>
+	</header>
+	<div class="admin-layout">
+		<aside class="sidebar">
+			<p class="side-label">Workspace</p>
+			<nav class="side-nav" aria-label="Owner portal sections">
+				<a href="/admin/">Overview</a>
+				<a data-section-link="devices" href="/admin/sections.html?section=devices">Devices</a>
+				<a data-section-link="subscriptions" href="/admin/sections.html?section=subscriptions">Subscriptions</a>
+				<a data-section-link="payments" href="/admin/sections.html?section=payments">Payments</a>
+				<a data-section-link="vouchers" href="/admin/sections.html?section=vouchers">Vouchers</a>
+				<a data-section-link="audit" href="/admin/sections.html?section=audit">Audit log</a>
+				<a href="/admin/plans.html">Plans</a>
+				<a href="/admin/account.html">Account security</a>
+			</nav>
+		</aside>
+		<main class="admin-content">
+			<p id="admin-message" class="form-message" role="status" aria-live="polite"></p>
+			<div class="admin-heading">
+				<div>
+					<p id="admin-section-eyebrow" class="eyebrow"></p>
+					<h1 id="admin-section-title"></h1>
+					<p id="admin-section-description"></p>
+				</div>
+				<span id="admin-section-badge" class="pill mint" hidden></span>
+			</div>
+			<div id="admin-section-content"></div>
+		</main>
+	</div>
+	<script src="../assets/admin.js" defer></script>
+</body>
+</html>

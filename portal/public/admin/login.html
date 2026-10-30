@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#07111d">
+	<title>FastConnect | Admin sign in</title>
+	<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+	<main class="auth-shell">
+		<section class="surface auth-card">
+			<a class="brand" href="../index.html">
+				<span class="brand-mark">F</span>
+				<span class="brand-name">FastConnect</span>
+			</a>
+			<p class="eyebrow">Administrator access</p>
+			<h1>Sign in.</h1>
+			<p class="lead">Sign in to view development account totals.</p>
+			<form id="admin-login-form" class="form-stack">
+				<label class="field">Username
+					<span class="icon-input">
+						<svg class="field-leading-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+							<circle cx="12" cy="8" r="4"></circle>
+							<path d="M4 21a8 8 0 0 1 16 0"></path>
+						</svg>
+						<input name="username" autocomplete="username" required minlength="3" maxlength="64" pattern="[A-Za-z0-9._\-]+">
+					</span>
+				</label>
+				<label class="field">Password
+					<span class="icon-input has-password-toggle">
+						<svg class="field-leading-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+							<rect x="4" y="10" width="16" height="11" rx="2"></rect>
+							<path d="M8 10V7a4 4 0 1 1 8 0v3M12 14v3"></path>
+						</svg>
+						<input id="admin-password" name="password" type="password" autocomplete="current-password" required minlength="12" maxlength="256">
+						<button class="password-toggle" type="button" aria-controls="admin-password" aria-label="Show password" aria-pressed="false">
+							<svg class="password-eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+								<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"></path>
+							</svg>
+						</button>
+					</span>
+				</label>
+				<button class="button full" type="submit">Sign in</button>
+				<p id="admin-message" class="form-message" role="status" aria-live="polite"></p>
+			</form>
+			<p class="field-hint">First-time setup must be enabled by the site operator before you can create the first administrator.</p>
+			<p class="page-links"><a href="/admin/setup.html">Open one-time administrator setup</a></p>
+		</section>
+	</main>
+	<script src="../assets/admin.js" defer></script>
+</body>
+</html>

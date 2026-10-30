@@ -4,7 +4,7 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<meta name="theme-color" content="#07111d">
-	<title>FastConnect | Secure payment</title>
+	<title>FastConnect | Test order details</title>
 	<link rel="stylesheet" href="assets/style.css">
 </head>
 
@@ -18,25 +18,25 @@
 	</header>
 
 	<main class="tenant-main narrow">
-		<p class="eyebrow">Step 2 of 2 · Payment</p>
-		<h1>Almost connected.</h1>
-		<p class="lead">Enter the mobile-money number that will approve this payment.</p>
+		<p class="eyebrow">Development preview · Test order</p>
+		<h1>Review test order details.</h1>
+		<p class="lead">Fapshi sandbox only: use its documented test numbers to simulate a payment. No real money is involved, and this preview does not provide Wi-Fi access.</p>
 
 		<section class="surface">
-			<h2>Your plan</h2>
+			<h2>Selected plan</h2>
 			<div class="summary-row">
 				<span id="plan-name">30-day plan</span>
 				<strong id="plan-price">5,000 XAF</strong>
 			</div>
 			<div class="summary-row">
 				<span>Device</span>
-				<strong>This device</strong>
+				<strong id="device-status">Checking router details…</strong>
 			</div>
-			<form class="form-stack" action="#" method="get">
+			<form id="checkout-form" class="form-stack">
 				<label class="field">
-					Mobile-money number
-					<input type="tel" inputmode="tel" placeholder="6XX XXX XXX" autocomplete="tel">
-					<span class="field-hint">Use the number linked to your MTN or Orange Money account.</span>
+					Fapshi sandbox test number
+				<input id="phone-number" name="phoneNumber" type="tel" inputmode="tel" placeholder="6XX XXX XXX" autocomplete="tel" required>
+					<span class="field-hint">Only documented sandbox test numbers are accepted. For example, 670000000 simulates MTN success; 670000001 simulates failure. These never charge real money.</span>
 				</label>
 				<div class="field">
 					Choose your payment network
@@ -57,17 +57,18 @@
 						</button>
 					</div>
 				</div>
-				<button class="button full" type="button">Continue to payment</button>
+				<button id="checkout-submit" class="button full" type="submit">Create sandbox payment request</button>
+				<p id="checkout-message" class="form-message" role="status" aria-live="polite"></p>
 			</form>
 		</section>
 
+		<a id="order-status-link" class="button full" href="status.html" hidden>Check this test order</a>
 		<div class="inline-note">
 			<span>
-				We’ll send a payment request to your phone.
-				<strong>Never share your mobile-money PIN</strong> on this page.
+				This development site is permanently restricted to Fapshi's sandbox endpoint. <strong>It cannot initiate a live payment or provide Wi-Fi while the router is disconnected.</strong>
 			</span>
 		</div>
 	</main>
-	<script src="assets/app.js"></script>
+	<script src="assets/app.js" defer></script>
 </body>
 </html>

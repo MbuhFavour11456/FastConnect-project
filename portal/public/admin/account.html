@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#07111d">
+	<title>FastConnect | Account security</title>
+	<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="admin-app">
+	<header class="admin-topbar owner-topbar">
+		<div class="admin-topbar-left">
+			<a class="brand" href="../index.html">
+				<span class="brand-mark">F</span>
+				<span class="brand-name">FastConnect</span>
+			</a>
+			<span class="owner-badge">Owner portal</span>
+		</div>
+		<div class="admin-user">
+			<strong id="admin-name">Owner</strong>
+			<button id="admin-logout" class="button secondary" type="button">Sign out</button>
+		</div>
+	</header>
+	<div class="admin-layout">
+		<aside class="sidebar">
+			<p class="side-label">Workspace</p>
+			<nav class="side-nav" aria-label="Owner portal sections">
+				<a href="/admin/">Overview</a>
+				<a href="/admin/sections.html?section=devices">Devices</a>
+				<a href="/admin/sections.html?section=subscriptions">Subscriptions</a>
+				<a href="/admin/sections.html?section=payments">Payments</a>
+				<a href="/admin/sections.html?section=vouchers">Vouchers</a>
+				<a href="/admin/sections.html?section=audit">Audit log</a>
+				<a href="/admin/plans.html">Plans</a>
+				<a class="active" href="/admin/account.html" aria-current="page">Account security</a>
+			</nav>
+		</aside>
+		<main class="admin-content">
+			<p id="admin-message" class="form-message" role="status" aria-live="polite"></p>
+			<div class="admin-heading">
+				<div>
+					<p class="eyebrow">Shared owner account</p>
+					<h1>Account security</h1>
+					<p>Change the password shared by your family administrators.</p>
+				</div>
+			</div>
+			<section class="surface auth-card">
+				<h2>Change password</h2>
+				<p class="field-hint">Changing it signs out all active sessions. Share the new password only with trusted family members.</p>
+				<form id="admin-password-form" class="form-stack">
+					<label class="field">Current password
+						<span class="icon-input has-password-toggle">
+							<svg class="field-leading-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+								<rect x="4" y="10" width="16" height="11" rx="2"></rect>
+								<path d="M8 10V7a4 4 0 1 1 8 0v3M12 14v3"></path>
+							</svg>
+							<input id="admin-current-password" name="currentPassword" type="password" autocomplete="current-password" required maxlength="256">
+							<button class="password-toggle" type="button" aria-controls="admin-current-password" aria-label="Show password" aria-pressed="false">
+								<svg class="password-eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+									<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"></path>
+								</svg>
+							</button>
+						</span>
+					</label>
+					<label class="field">New password
+						<span class="icon-input has-password-toggle">
+							<svg class="field-leading-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+								<rect x="4" y="10" width="16" height="11" rx="2"></rect>
+								<path d="M8 10V7a4 4 0 1 1 8 0v3M12 14v3"></path>
+							</svg>
+							<input id="admin-new-password" name="newPassword" type="password" autocomplete="new-password" required minlength="12" maxlength="256">
+							<button class="password-toggle" type="button" aria-controls="admin-new-password" aria-label="Show password" aria-pressed="false">
+								<svg class="password-eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+									<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"></path>
+								</svg>
+							</button>
+						</span>
+						<span class="field-hint">Use at least 12 characters. Do not reuse a personal, email, or payment password.</span>
+					</label>
+					<label class="field">Confirm new password
+						<span class="icon-input has-password-toggle">
+							<svg class="field-leading-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+								<rect x="4" y="10" width="16" height="11" rx="2"></rect>
+								<path d="M8 10V7a4 4 0 1 1 8 0v3M12 14v3"></path>
+							</svg>
+							<input id="admin-confirm-password" name="confirmPassword" type="password" autocomplete="new-password" required minlength="12" maxlength="256">
+							<button class="password-toggle" type="button" aria-controls="admin-confirm-password" aria-label="Show password" aria-pressed="false">
+								<svg class="password-eye" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+									<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"></path>
+								</svg>
+							</button>
+						</span>
+					</label>
+					<button class="button" type="submit">Change password</button>
+				</form>
+			</section>
+			<div class="inline-note owner-note"><span>The owner account is shared among your family. Anyone with the current password can manage the portal.</span></div>
+		</main>
+	</div>
+	<script src="../assets/admin.js" defer></script>
+</body>
+</html>

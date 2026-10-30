@@ -14,38 +14,58 @@
 			<span class="brand-mark">F</span>
 			<span class="brand-name">FastConnect</span>
 		</a>
-		<span class="network-state">Connected to compound Wi-Fi</span>
+		<span class="network-state">Order status</span>
 	</header>
 
 	<main class="tenant-main narrow">
-		<p class="eyebrow">Your connection</p>
-		<h1>You’re online.</h1>
-		<p class="lead">Your subscription is active on this device.</p>
+		<p class="eyebrow">Development order</p>
+		<h1>Check order status.</h1>
+		<p class="lead">Enter the order reference from the test order page.</p>
 
 		<section class="surface">
-			<div class="status-line">Active subscription</div>
-			<div class="summary-row">
-				<span>Plan</span>
-				<strong>30 days</strong>
-			</div>
-			<div class="summary-row">
-				<span>Started</span>
-				<strong>1 October 2026, 09:42</strong>
-			</div>
-			<div class="summary-row">
-				<span>Expires</span>
-				<strong>31 October 2026, 09:42</strong>
-			</div>
-			<div class="summary-row">
-				<span>Device</span>
-				<strong>This device</strong>
+			<form id="status-form" class="form-stack">
+				<label class="field">
+					Order reference
+					<input id="order-reference" name="reference" type="text" autocomplete="off" maxlength="120" required>
+				</label>
+				<label class="field">
+					Device address
+					<input id="device-mac" name="mac" type="text" autocomplete="off" maxlength="17" required>
+					<span class="field-hint">This must match the device address used for the test order.</span>
+				</label>
+				<button class="button full" type="submit">Check status</button>
+				<p id="status-message" class="form-message" role="status" aria-live="polite"></p>
+			</form>
+			<div id="order-status-result" hidden>
+				<div id="order-status-label" class="status-line"></div>
+				<div class="summary-row">
+					<span>Plan</span>
+					<strong id="order-plan"></strong>
+				</div>
+				<div class="summary-row">
+					<span>Amount</span>
+					<strong id="order-amount"></strong>
+				</div>
+				<div class="summary-row">
+					<span>Sandbox payment</span>
+					<strong id="payment-status">Not started</strong>
+				</div>
+				<div id="subscription-details">
+					<div class="summary-row">
+						<span>Started</span>
+						<strong id="subscription-start"></strong>
+					</div>
+					<div class="summary-row">
+						<span>Expires</span>
+						<strong id="subscription-expiry"></strong>
+					</div>
+				</div>
 			</div>
 		</section>
 
 		<div class="inline-note">
 			<span>
-				Turned Wi-Fi off? Reconnect with the same device and you’ll get back online automatically. Subscription
-				time continues while disconnected.
+				This development status page verifies Fapshi sandbox payments only. It does not provide Wi-Fi access.
 			</span>
 		</div>
 
@@ -54,5 +74,6 @@
 			<a class="quiet-link" href="help.html">Get help</a>
 		</nav>
 	</main>
+	<script src="assets/app.js" defer></script>
 </body>
 </html>

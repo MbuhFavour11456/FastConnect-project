@@ -14,48 +14,23 @@
 			<span class="brand-mark">F</span>
 			<span class="brand-name">FastConnect</span>
 		</a>
-		<span class="network-state">Compound Wi-Fi available</span>
+		<span class="network-state">Development preview</span>
 	</header>
 
 	<main class="tenant-main">
 		<p class="eyebrow">Welcome to your compound Wi-Fi</p>
 		<h1>Choose your connection.</h1>
 		<p class="lead">
-			Pick a plan, approve the mobile-money request on your phone, and you’ll be connected on this device.
+			Choose a plan. Payments are disabled in this development version.
 		</p>
 
-		<section class="plan-grid" aria-label="Internet plans">
-			<article class="plan">
-				<div class="plan-top">
-					<span class="pill">10 days</span>
-					<span class="pill">One device</span>
-				</div>
-				<p class="price">
-					2,000
-					<small>XAF</small>
-				</p>
-				<p class="plan-detail">10 consecutive days of Wi-Fi access</p>
-				<a class="button full" href="checkout.html?plan=10">Choose 10-day plan</a>
-			</article>
-			<article class="plan featured">
-				<div class="plan-top">
-					<span class="pill mint">30 days</span>
-					<span class="pill">One device</span>
-				</div>
-				<p class="price">
-					5,000
-					<small>XAF</small>
-				</p>
-				<p class="plan-detail">30 consecutive days of Wi-Fi access</p>
-				<a class="button full" href="checkout.html?plan=30">Choose 30-day plan</a>
-			</article>
-		</section>
+		<p id="plans-message" class="form-message" role="status" aria-live="polite"></p>
+		<section id="plan-grid" class="plan-grid" aria-label="Internet plans" aria-live="polite"></section>
 
 		<div class="inline-note">
 			<span>
-				<strong>Already paid?</strong>
-				Your device reconnects automatically while your plan is active. Your time keeps counting down while
-				you’re offline.
+				<strong>Development version:</strong>
+				Payments and Wi-Fi access are not enabled here.
 			</span>
 		</div>
 
@@ -64,5 +39,6 @@
 			<a class="quiet-link" href="help.html">Help &amp; payment guidance</a>
 		</nav>
 	</main>
+	<script src="assets/app.js" defer></script>
 </body>
 </html>

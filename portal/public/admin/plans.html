@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="theme-color" content="#07111d">
+	<title>FastConnect | Plans</title>
+	<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="admin-app">
+	<header class="admin-topbar owner-topbar">
+		<div class="admin-topbar-left">
+			<a class="brand" href="../index.html">
+				<span class="brand-mark">F</span>
+				<span class="brand-name">FastConnect</span>
+			</a>
+			<span class="owner-badge">Owner portal</span>
+		</div>
+		<div class="admin-user">
+			<strong id="admin-name">Owner</strong>
+			<button id="admin-logout" class="button secondary" type="button">Sign out</button>
+		</div>
+	</header>
+	<div class="admin-layout">
+		<aside class="sidebar">
+			<p class="side-label">Workspace</p>
+			<nav class="side-nav" aria-label="Owner portal sections">
+				<a href="/admin/">Overview</a>
+				<a href="/admin/sections.html?section=devices">Devices</a>
+				<a href="/admin/sections.html?section=subscriptions">Subscriptions</a>
+				<a href="/admin/sections.html?section=payments">Payments</a>
+				<a href="/admin/sections.html?section=vouchers">Vouchers</a>
+				<a href="/admin/sections.html?section=audit">Audit log</a>
+				<a class="active" href="/admin/plans.html" aria-current="page">Plans</a>
+				<a href="/admin/account.html">Account security</a>
+			</nav>
+		</aside>
+		<main class="admin-content">
+			<p id="admin-message" class="form-message" role="status" aria-live="polite"></p>
+			<div class="admin-heading">
+				<div>
+					<p class="eyebrow">Customer offers</p>
+					<h1>Wi-Fi plans</h1>
+					<p>Manage the prices and durations shown on the public plans page.</p>
+				</div>
+			</div>
+			<section class="surface spaced">
+				<div class="panel-heading"><h2>Create a plan</h2></div>
+				<form id="admin-plan-create-form" class="form-stack">
+					<div class="choice-row">
+						<label class="field">Plan ID
+							<input name="id" required minlength="1" maxlength="64" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="e.g. 7-day">
+							<span class="field-hint">Lowercase letters, numbers, and hyphens; cannot be changed later.</span>
+						</label>
+						<label class="field">Plan name
+							<input name="name" required maxlength="80" placeholder="e.g. 7-Day Plan">
+						</label>
+					</div>
+					<div class="choice-row">
+						<label class="field">Duration in days
+							<input name="days" type="number" required min="1" max="365">
+						</label>
+						<label class="field">Price (XAF)
+							<input name="priceXaf" type="number" required min="1" max="5000000" step="1">
+						</label>
+					</div>
+					<label class="field">Description
+						<input name="description" required maxlength="240" placeholder="Describe the plan for customers">
+					</label>
+					<label class="field checkbox-field">
+						<input name="isActive" type="checkbox" checked>
+						Available on the public plans page
+					</label>
+					<button class="button" type="submit">Create plan</button>
+				</form>
+			</section>
+			<section class="surface spaced">
+				<div class="panel-heading">
+					<div>
+						<h2>Existing plans</h2>
+						<p class="field-hint">Unavailable plans stay in order history and can be reactivated later.</p>
+					</div>
+					<button id="admin-plans-refresh" class="button secondary" type="button">Refresh plans</button>
+				</div>
+				<div id="admin-plans-list" class="admin-plan-list"></div>
+			</section>
+			<div class="inline-note owner-note">
+				<span>Plan changes affect new orders and the public plans page. Existing orders retain their recorded price; existing subscriptions keep their recorded expiry time.</span>
+			</div>
+		</main>
+	</div>
+	<script src="../assets/admin.js" defer></script>
+</body>
+</html>

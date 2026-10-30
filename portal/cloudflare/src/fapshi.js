@@ -1,4 +1,5 @@
 import { recordVerifiedPaymentResult } from "./payments.js";
+import { getCurrentCustomer } from "./customer-auth.js";
 
 const SANDBOX_URL = "https://sandbox.fapshi.com";
 const LOCAL_INTENT_PREFIX = "INIT-";
@@ -111,7 +112,7 @@ async function verifiedStatus(env, transId, order, expectedMedium) {
   };
 }
 
-async function getOrderPayment(db, reference, macAddress) {
+async function getOrderPayment(db, reference, macAddress, customerId = null) {
   return db
     .prepare(
       `SELECT o.id, o.reference, o.amount_xaf, o.status AS order_status,
@@ -132,9 +133,13 @@ async function getOrderPayment(db, reference, macAddress) {
          END, payment.created_at DESC
          LIMIT 1
        )
-       WHERE o.reference = ? AND d.mac_address = ?`,
+       WHERE o.reference = ?
+         AND (
+           (? IS NOT NULL AND o.customer_id = ?)
+           OR (? IS NULL AND o.customer_id IS NULL AND d.mac_address = ?)
+         )`,
     )
-    .bind(reference, macAddress)
+    .bind(reference, customerId, customerId, customerId, macAddress)
     .first();
 }
 
@@ -158,11 +163,12 @@ export async function startSandboxPayment(request, env, db, reference) {
   if (!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(macAddress)) {
     return jsonResponse({ error: "A valid device MAC address is required" }, 400);
   }
+  const customer = await getCurrentCustomer(request, db);
   if (!configured(env)) {
     return jsonResponse({ error: "Fapshi sandbox credentials are not configured" }, 503);
   }
 
-  const order = await getOrderPayment(db, reference, macAddress);
+  const order = await getOrderPayment(db, reference, macAddress, customer?.id ?? null);
   if (!order || order.order_status !== "pending") {
     return jsonResponse({ error: "Pending order not found for this device" }, 404);
   }

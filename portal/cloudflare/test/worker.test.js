@@ -2293,7 +2293,9 @@ test("customers can view only subscriptions owned by their signed-in account", a
 
     await createActiveTestSubscription(database, "FC-CUSTOMER-SUBSCRIPTION");
     database.prepare(
-      "UPDATE subscriptions SET customer_id = ? WHERE order_id = ?",
+      `UPDATE subscriptions
+       SET customer_id = ?
+       WHERE order_id = (SELECT id FROM orders WHERE reference = ?)`,
     ).run(firstCustomer.id, "FC-CUSTOMER-SUBSCRIPTION");
 
     const login = await worker.fetch(

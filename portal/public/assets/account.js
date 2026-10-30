@@ -92,6 +92,11 @@ async function loadCustomerSubscriptions() {
 }
 
 function renderCustomer(customer) {
+  const next = new URLSearchParams(window.location.search).get("next");
+  if (next && next.startsWith("/") && !next.startsWith("//")) {
+    window.location.replace(next);
+    return;
+  }
   document.querySelector("#account-name").textContent = customer.fullName;
   document.querySelector("#account-email").textContent = customer.email;
   currentPanel.hidden = false;

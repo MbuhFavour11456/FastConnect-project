@@ -27,10 +27,11 @@ export async function handleAccountAccessRequest(request, db) {
      JOIN plans ON plans.id = subscriptions.plan_id
      WHERE subscriptions.customer_id = ?
        AND subscriptions.status = 'active'
+       AND subscriptions.started_at <= ?
        AND (subscriptions.expires_at IS NULL OR subscriptions.expires_at > ?)
      ORDER BY subscriptions.expires_at DESC
      LIMIT 1`,
-  ).bind(customer.id, now).first();
+  ).bind(customer.id, now, now).first();
 
   const entitlement = await db.prepare(
     `SELECT entitlement_type, expires_at

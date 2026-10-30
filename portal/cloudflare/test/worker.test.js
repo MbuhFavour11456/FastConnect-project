@@ -72,6 +72,7 @@ async function createTestDatabase() {
     "0005_fapshi_sandbox.sql",
     "0006_vouchers.sql",
     "0007_subscription_expiry.sql",
+    "0008_customer_accounts_households.sql",
   ]) {
     const migration = await readFile(
       new URL(`../migrations/${migrationName}`, import.meta.url),
@@ -2049,6 +2050,103 @@ test("D1 schema enforces unique device addresses and order references", async ()
           ),
       /UNIQUE constraint failed: orders\.reference/,
     );
+  } finally {
+    database.close();
+  }
+});
+
+
+test("customer accounts can register, sign in, and revoke their session", async () => {
+  const database = await createTestDatabase();
+  const db = new LocalD1(database);
+  const env = { DB: db };
+  const origin = "https://fastconnect.test";
+
+  try {
+    const registerResponse = await worker.fetch(
+      new Request(`${origin}/api/account/register`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          fullName: "Test Customer",
+          email: "customer@example.com",
+          phoneNumber: "+237 670 000 000",
+          password: "correct-horse-battery-staple",
+        }),
+      }),
+      env,
+    );
+    assert.equal(registerResponse.status, 201);
+    const registered = await registerResponse.json();
+    assert.equal(registered.customer.email, "customer@example.com");
+
+    const loginResponse = await worker.fetch(
+      new Request(`${origin}/api/account/login`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "CUSTOMER@example.com",
+          password: "correct-horse-battery-staple",
+        }),
+      }),
+      env,
+    );
+    assert.equal(loginResponse.status, 200);
+    assert.equal((await loginResponse.json()).authenticated, true);
+    const setCookie = loginResponse.headers.get("set-cookie");
+    assert.match(setCookie, /HttpOnly/);
+    assert.match(setCookie, /SameSite=Lax/);
+    const cookie = setCookie.split(";")[0];
+
+    const sessionResponse = await worker.fetch(
+      new Request(`${origin}/api/account/session`, { headers: { cookie } }),
+      env,
+    );
+    const session = await sessionResponse.json();
+    assert.equal(session.authenticated, true);
+    assert.equal(session.customer.email, "customer@example.com");
+
+    const logoutResponse = await worker.fetch(
+      new Request(`${origin}/api/account/logout`, {
+        method: "POST",
+        headers: { origin, cookie },
+      }),
+      env,
+    );
+    assert.equal(logoutResponse.status, 200);
+
+    const afterLogout = await worker.fetch(
+      new Request(`${origin}/api/account/session`, { headers: { cookie } }),
+      env,
+    );
+    assert.equal((await afterLogout.json()).authenticated, false);
+  } finally {
+    database.close();
+  }
+});
+
+test("customer registration rejects duplicate email addresses", async () => {
+  const database = await createTestDatabase();
+  const db = new LocalD1(database);
+  const env = { DB: db };
+  const origin = "https://fastconnect.test";
+  const body = JSON.stringify({
+    fullName: "Test Customer",
+    email: "duplicate@example.com",
+    password: "correct-horse-battery-staple",
+  });
+
+  try {
+    const sendRegistration = () => worker.fetch(
+      new Request(`${origin}/api/account/register`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body,
+      }),
+      env,
+    );
+    assert.equal((await sendRegistration()).status, 201);
+    assert.equal((await sendRegistration()).status, 409);
   } finally {
     database.close();
   }

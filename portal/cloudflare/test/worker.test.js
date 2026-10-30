@@ -2154,3 +2154,112 @@ test("customer registration rejects duplicate email addresses", async () => {
     database.close();
   }
 });
+
+
+test("admin can create a household and approve a family member's unlimited entitlement", async () => {
+  const database = await createTestDatabase();
+  const env = {
+    DB: new LocalD1(database),
+    ADMIN_SETUP_TOKEN: "test-admin-setup-token-that-is-long-enough-123",
+    ADMIN_SESSION_SECRET: "test-admin-session-secret-that-is-long-enough-123",
+  };
+  const origin = "https://app.test";
+
+  const registerCustomer = async (fullName, email) => {
+    const response = await worker.fetch(
+      new Request(`${origin}/api/account/register`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          fullName,
+          email,
+          password: "correct-horse-battery-staple",
+        }),
+      }),
+      env,
+    );
+    assert.equal(response.status, 201);
+  };
+
+  try {
+    await registerCustomer("Household Owner", "owner@example.com");
+    await registerCustomer("Family Member", "member@example.com");
+
+    const setup = await worker.fetch(
+      new Request(`${origin}/api/admin/setup`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          setupToken: env.ADMIN_SETUP_TOKEN,
+          username: "owner",
+          fullName: "FastConnect Owner",
+          password: "a-long-test-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal(setup.status, 201);
+
+    const login = await worker.fetch(
+      new Request(`${origin}/api/admin/login`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          username: "owner",
+          password: "a-long-test-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+
+    const created = await worker.fetch(
+      new Request(`${origin}/api/admin/households`, {
+        method: "POST",
+        headers: { origin, cookie, "content-type": "application/json" },
+        body: JSON.stringify({ name: "Test household", ownerEmail: "owner@example.com" }),
+      }),
+      env,
+    );
+    assert.equal(created.status, 201);
+    const createdPayload = await created.json();
+    const householdId = createdPayload.household.id;
+    assert.equal(createdPayload.ownerAccess, "approved");
+
+    const added = await worker.fetch(
+      new Request(`${origin}/api/admin/households/${householdId}/members`, {
+        method: "POST",
+        headers: { origin, cookie, "content-type": "application/json" },
+        body: JSON.stringify({ email: "member@example.com" }),
+      }),
+      env,
+    );
+    assert.equal(added.status, 201);
+    const addedPayload = await added.json();
+    assert.equal(addedPayload.membership.status, "pending");
+
+    const approved = await worker.fetch(
+      new Request(`${origin}/api/admin/household-memberships/${addedPayload.membership.id}/approve`, {
+        method: "POST",
+        headers: { origin, cookie },
+      }),
+      env,
+    );
+    assert.equal(approved.status, 200);
+    assert.equal((await approved.json()).access, "unlimited_household");
+
+    const entitlement = database.prepare(
+      `SELECT access_entitlements.status, access_entitlements.expires_at,
+              access_entitlements.entitlement_type
+       FROM access_entitlements
+       JOIN customers ON customers.id = access_entitlements.customer_id
+       WHERE customers.email = 'member@example.com'`,
+    ).get();
+    assert.equal(entitlement.status, "active");
+    assert.equal(entitlement.expires_at, null);
+    assert.equal(entitlement.entitlement_type, "household");
+  } finally {
+    database.close();
+  }
+});

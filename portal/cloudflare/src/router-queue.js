@@ -65,6 +65,17 @@ async function claimNextCommand(db) {
   const leaseUntil = new Date(
     nowDate.getTime() + CLAIM_LEASE_SECONDS * 1000,
   ).toISOString();
+
+  // Recover a worker that died after its final allowed claim.
+  await db.prepare(
+    `UPDATE router_commands
+     SET status = 'failed',
+         last_error = COALESCE(last_error, 'claim_lease_expired_after_max_attempts')
+     WHERE status = 'claimed'
+       AND available_at <= ?
+       AND attempts >= ?`,
+  ).bind(now, MAX_ATTEMPTS).run();
+
   const claimed = await db
     .prepare(
       `UPDATE router_commands
@@ -184,7 +195,7 @@ async function recordCommandResult(request, db, commandId) {
   }
 
   const command = await db
-    .prepare("SELECT id, status, attempts FROM router_commands WHERE id = ?")
+    .prepare("SELECT id, subscription_id, action, status, attempts FROM router_commands WHERE id = ?")
     .bind(commandId)
     .first();
   if (!command) {
@@ -202,16 +213,32 @@ async function recordCommandResult(request, db, commandId) {
   const nowDate = new Date();
   const now = nowDate.toISOString();
   if (result.result === "applied") {
-    const update = await db
-      .prepare(
-        `UPDATE router_commands
-         SET status = 'applied', applied_at = ?, last_error = NULL
-         WHERE id = ? AND status = 'claimed'`,
-      )
-      .bind(now, commandId)
-      .run();
+    const updates = await db.batch([
+      db
+        .prepare(
+          `UPDATE router_commands
+           SET status = 'applied', applied_at = ?, last_error = NULL
+           WHERE id = ? AND status = 'claimed'`,
+        )
+        .bind(now, commandId),
+      db
+        .prepare(
+          `UPDATE subscriptions
+           SET access_applied_at = ?
+           WHERE id = ? AND ? = 'grant'`,
+        )
+        .bind(now, command.subscription_id, command.action),
+      db
+        .prepare(
+          `UPDATE subscriptions
+           SET access_applied_at = NULL
+           WHERE id = ? AND ? = 'revoke'`,
+        )
+        .bind(command.subscription_id, command.action),
+    ]);
+    const update = updates[0];
 
-    if ((update.meta?.changes ?? 0) !== 1) {
+    if ((update.meta?.changes ?? update.changes ?? 0) !== 1) {
       const current = await db
         .prepare("SELECT status FROM router_commands WHERE id = ?")
         .bind(commandId)

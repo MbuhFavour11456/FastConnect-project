@@ -72,6 +72,7 @@ async function createTestDatabase() {
     "0005_fapshi_sandbox.sql",
     "0006_vouchers.sql",
     "0007_subscription_expiry.sql",
+    "0008_customer_accounts_households.sql",
   ]) {
     const migration = await readFile(
       new URL(`../migrations/${migrationName}`, import.meta.url),
@@ -1313,6 +1314,9 @@ test("scheduled expiry marks due subscriptions and queues one router revocation"
     .run("00000000-0000-4000-8000-000000000002", "subscription-FC-SUBSCRIPTION-EXPIRED");
   await createActiveTestSubscription(database, "FC-SUBSCRIPTION-CURRENT");
   database
+    .prepare("UPDATE subscriptions SET expires_at = ? WHERE order_id = ?")
+    .run(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), "order-FC-SUBSCRIPTION-CURRENT");
+  database
     .prepare(
       "UPDATE subscriptions SET expires_at = ? WHERE order_id = ?",
     )
@@ -2049,6 +2053,212 @@ test("D1 schema enforces unique device addresses and order references", async ()
           ),
       /UNIQUE constraint failed: orders\.reference/,
     );
+  } finally {
+    database.close();
+  }
+});
+
+
+test("customer accounts can register, sign in, and revoke their session", async () => {
+  const database = await createTestDatabase();
+  const db = new LocalD1(database);
+  const env = { DB: db };
+  const origin = "https://fastconnect.test";
+
+  try {
+    const registerResponse = await worker.fetch(
+      new Request(`${origin}/api/account/register`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          fullName: "Test Customer",
+          email: "customer@example.com",
+          phoneNumber: "+237 670 000 000",
+          password: "correct-horse-battery-staple",
+        }),
+      }),
+      env,
+    );
+    assert.equal(registerResponse.status, 201);
+    const registered = await registerResponse.json();
+    assert.equal(registered.customer.email, "customer@example.com");
+
+    const loginResponse = await worker.fetch(
+      new Request(`${origin}/api/account/login`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "CUSTOMER@example.com",
+          password: "correct-horse-battery-staple",
+        }),
+      }),
+      env,
+    );
+    assert.equal(loginResponse.status, 200);
+    assert.equal((await loginResponse.json()).authenticated, true);
+    const setCookie = loginResponse.headers.get("set-cookie");
+    assert.match(setCookie, /HttpOnly/);
+    assert.match(setCookie, /SameSite=Lax/);
+    const cookie = setCookie.split(";")[0];
+
+    const sessionResponse = await worker.fetch(
+      new Request(`${origin}/api/account/session`, { headers: { cookie } }),
+      env,
+    );
+    const session = await sessionResponse.json();
+    assert.equal(session.authenticated, true);
+    assert.equal(session.customer.email, "customer@example.com");
+
+    const logoutResponse = await worker.fetch(
+      new Request(`${origin}/api/account/logout`, {
+        method: "POST",
+        headers: { origin, cookie },
+      }),
+      env,
+    );
+    assert.equal(logoutResponse.status, 200);
+
+    const afterLogout = await worker.fetch(
+      new Request(`${origin}/api/account/session`, { headers: { cookie } }),
+      env,
+    );
+    assert.equal((await afterLogout.json()).authenticated, false);
+  } finally {
+    database.close();
+  }
+});
+
+test("customer registration rejects duplicate email addresses", async () => {
+  const database = await createTestDatabase();
+  const db = new LocalD1(database);
+  const env = { DB: db };
+  const origin = "https://fastconnect.test";
+  const body = JSON.stringify({
+    fullName: "Test Customer",
+    email: "duplicate@example.com",
+    password: "correct-horse-battery-staple",
+  });
+
+  try {
+    const sendRegistration = () => worker.fetch(
+      new Request(`${origin}/api/account/register`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body,
+      }),
+      env,
+    );
+    assert.equal((await sendRegistration()).status, 201);
+    assert.equal((await sendRegistration()).status, 409);
+  } finally {
+    database.close();
+  }
+});
+
+
+test("admin can create a household and approve a family member's unlimited entitlement", async () => {
+  const database = await createTestDatabase();
+  const env = {
+    DB: new LocalD1(database),
+    ADMIN_SETUP_TOKEN: "test-admin-setup-token-that-is-long-enough-123",
+    ADMIN_SESSION_SECRET: "test-admin-session-secret-that-is-long-enough-123",
+  };
+  const origin = "https://app.test";
+
+  const registerCustomer = async (fullName, email) => {
+    const response = await worker.fetch(
+      new Request(`${origin}/api/account/register`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          fullName,
+          email,
+          password: "correct-horse-battery-staple",
+        }),
+      }),
+      env,
+    );
+    assert.equal(response.status, 201);
+  };
+
+  try {
+    await registerCustomer("Household Owner", "owner@example.com");
+    await registerCustomer("Family Member", "member@example.com");
+
+    const setup = await worker.fetch(
+      new Request(`${origin}/api/admin/setup`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          setupToken: env.ADMIN_SETUP_TOKEN,
+          username: "owner",
+          fullName: "FastConnect Owner",
+          password: "a-long-test-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal(setup.status, 201);
+
+    const login = await worker.fetch(
+      new Request(`${origin}/api/admin/login`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          username: "owner",
+          password: "a-long-test-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+
+    const created = await worker.fetch(
+      new Request(`${origin}/api/admin/households`, {
+        method: "POST",
+        headers: { origin, cookie, "content-type": "application/json" },
+        body: JSON.stringify({ name: "Test household", ownerEmail: "owner@example.com" }),
+      }),
+      env,
+    );
+    assert.equal(created.status, 201);
+    const createdPayload = await created.json();
+    const householdId = createdPayload.household.id;
+    assert.equal(createdPayload.ownerAccess, "approved");
+
+    const added = await worker.fetch(
+      new Request(`${origin}/api/admin/households/${householdId}/members`, {
+        method: "POST",
+        headers: { origin, cookie, "content-type": "application/json" },
+        body: JSON.stringify({ email: "member@example.com" }),
+      }),
+      env,
+    );
+    assert.equal(added.status, 201);
+    const addedPayload = await added.json();
+    assert.equal(addedPayload.membership.status, "pending");
+
+    const approved = await worker.fetch(
+      new Request(`${origin}/api/admin/household-memberships/${addedPayload.membership.id}/approve`, {
+        method: "POST",
+        headers: { origin, cookie },
+      }),
+      env,
+    );
+    assert.equal(approved.status, 200);
+    assert.equal((await approved.json()).access, "unlimited_household");
+
+    const entitlement = database.prepare(
+      `SELECT access_entitlements.status, access_entitlements.expires_at,
+              access_entitlements.entitlement_type
+       FROM access_entitlements
+       JOIN customers ON customers.id = access_entitlements.customer_id
+       WHERE customers.email = 'member@example.com'`,
+    ).get();
+    assert.equal(entitlement.status, "active");
+    assert.equal(entitlement.expires_at, null);
+    assert.equal(entitlement.entitlement_type, "household");
   } finally {
     database.close();
   }

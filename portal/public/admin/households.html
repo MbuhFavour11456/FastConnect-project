@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07111d">
+  <title>FastConnect | Household access</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body class="admin-app">
+  <header class="admin-topbar owner-topbar">
+    <div class="admin-topbar-left">
+      <a class="brand" href="../index.html"><span class="brand-mark">F</span><span class="brand-name">FastConnect</span></a>
+      <span class="owner-badge">Household access</span>
+    </div>
+    <div class="admin-user">
+      <strong id="admin-name">Administrator</strong>
+      <button id="admin-logout" class="button secondary" type="button">Sign out</button>
+    </div>
+  </header>
+
+  <div class="admin-layout">
+    <aside class="sidebar">
+      <p class="side-label">Workspace</p>
+      <nav class="side-nav" aria-label="Owner portal sections">
+        <a href="/admin/">Overview</a>
+        <a href="/admin/sections.html?section=devices">Devices</a>
+        <a href="/admin/sections.html?section=subscriptions">Subscriptions</a>
+        <a href="/admin/sections.html?section=payments">Payments</a>
+        <a href="/admin/sections.html?section=vouchers">Vouchers</a>
+        <a href="/admin/households.html" class="active" aria-current="page">Household access</a>
+        <a href="/admin/sections.html?section=audit">Audit log</a>
+        <a href="/admin/plans.html">Plans</a>
+        <a href="/admin/account.html">Account security</a>
+      </nav>
+    </aside>
+
+    <main class="admin-content owner-content">
+      <p id="admin-message" class="form-message" role="status" aria-live="polite"></p>
+      <div class="admin-heading owner-heading">
+        <div>
+          <p class="eyebrow">Free family access</p>
+          <h1>Household access</h1>
+          <p>Create a household and approve each member's own account. Approved household access has no expiry date.</p>
+        </div>
+        <button id="household-refresh" class="button" type="button">Refresh</button>
+      </div>
+
+      <section class="owner-panels household-admin-panels">
+        <article class="surface owner-panel">
+          <div class="panel-heading"><div><h2>Create household</h2><p class="field-hint">The owner must already have a FastConnect customer account.</p></div></div>
+          <form id="household-form" class="form-stack">
+            <label class="field">Household or family name
+              <input name="name" type="text" minlength="2" maxlength="80" required placeholder="e.g. Nkweti household">
+            </label>
+            <label class="field">Owner's account email
+              <input name="ownerEmail" type="email" maxlength="254" required placeholder="owner@example.com">
+            </label>
+            <button class="button full" type="submit">Create and approve owner</button>
+            <p id="household-form-message" class="form-message" role="status" aria-live="polite"></p>
+          </form>
+        </article>
+
+        <article class="surface owner-panel">
+          <div class="panel-heading"><div><h2>Add a family member</h2><p class="field-hint">Members must register their own account first. New requests stay pending until an administrator approves them.</p></div></div>
+          <form id="member-form" class="form-stack">
+            <label class="field">Household
+              <select name="householdId" id="household-select" required>
+                <option value="">Load households first</option>
+              </select>
+            </label>
+            <label class="field">Family member's account email
+              <input name="email" type="email" maxlength="254" required placeholder="member@example.com">
+            </label>
+            <button class="button full" type="submit">Add pending member</button>
+            <p id="member-form-message" class="form-message" role="status" aria-live="polite"></p>
+          </form>
+        </article>
+      </section>
+
+      <section class="surface owner-panel household-table-panel">
+        <div class="panel-heading"><div><h2>Households</h2><p class="field-hint">Each family member uses their own account and may have one active network session.</p></div></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Owner</th><th>Members</th><th>Pending</th><th>Status</th><th>ID</th></tr></thead>
+            <tbody id="household-list"><tr><td colspan="6" class="muted">Loading households…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="surface owner-panel household-table-panel">
+        <div class="panel-heading"><div><h2>Family membership approvals</h2><p class="field-hint">Approve only people you recognize. Revoking membership removes their household entitlement; router enforcement still requires the MikroTik integration.</p></div></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Member</th><th>Email</th><th>Household</th><th>Status</th><th>Requested</th><th>Action</th></tr></thead>
+            <tbody id="membership-list"><tr><td colspan="6" class="muted">Loading memberships…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+      <div class="inline-note"><span><strong>Important:</strong> this page controls database entitlements. It does not yet switch live MikroTik access on or off. Do not promise real free internet until router integration and end-to-end tests are complete.</span></div>
+    </main>
+  </div>
+  <script src="../assets/households.js" defer></script>
+</body>
+</html>

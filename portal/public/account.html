@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07111d">
+  <title>FastConnect | Your account</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="tenant-header">
+    <a class="brand" href="index.html">
+      <span class="brand-mark">F</span>
+      <span class="brand-name">FastConnect</span>
+    </a>
+    <a class="quiet-link" href="index.html">Internet plans</a>
+  </header>
+
+  <main class="tenant-main narrow account-main">
+    <p class="eyebrow">Your FastConnect identity</p>
+    <h1>One account. Your connection.</h1>
+    <p class="lead">Create your personal account to manage subscriptions and, when enabled, join your household's free access program. Your password is never shared with the network administrator.</p>
+
+    <section id="account-current" class="surface account-current" hidden>
+      <p class="status-line">You're signed in</p>
+      <h2 id="account-name"></h2>
+      <p id="account-email" class="muted"></p>
+      <p class="field-hint">One account can have one active network session at a time. Signing in on another device replaces the previous web login; router session transfer will be enabled after MikroTik integration.</p>
+      <button id="account-logout" class="button secondary full" type="button">Sign out</button>
+    </section>
+
+    <section id="account-forms" class="account-grid">
+      <section class="surface account-card">
+        <h2>Welcome back</h2>
+        <p class="muted">Sign in to your existing account.</p>
+        <form id="login-form" class="form-stack">
+          <label class="field">Email address
+            <input name="email" type="email" autocomplete="email" maxlength="254" required>
+          </label>
+          <label class="field">Password
+            <input name="password" type="password" autocomplete="current-password" minlength="12" maxlength="256" required>
+          </label>
+          <button class="button full" type="submit">Sign in</button>
+          <p id="login-message" class="form-message" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+
+      <section class="surface account-card">
+        <h2>Create account</h2>
+        <p class="muted">Use your own account, even if your household will sponsor your access.</p>
+        <form id="register-form" class="form-stack">
+          <label class="field">Full name
+            <input name="fullName" type="text" autocomplete="name" minlength="2" maxlength="100" required>
+          </label>
+          <label class="field">Email address
+            <input name="email" type="email" autocomplete="email" maxlength="254" required>
+          </label>
+          <label class="field">Cameroon mobile number <span class="muted">(optional)</span>
+            <input name="phoneNumber" type="tel" inputmode="tel" autocomplete="tel" placeholder="+237 6XX XXX XXX" maxlength="24">
+          </label>
+          <label class="field">Create password
+            <input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="256" required>
+            <span class="field-hint">Use at least 12 characters. Never reuse your mobile-money PIN.</span>
+          </label>
+          <button class="button full" type="submit">Create account</button>
+          <p id="register-message" class="form-message" role="status" aria-live="polite"></p>
+        </form>
+      </section>
+    </section>
+
+    <div class="inline-note">
+      <span><strong>Development feature:</strong> account creation and sign-in are being introduced in stages. Email verification, password recovery, household approval, and live router access must be configured and tested before this can be used as a production service.</span>
+    </div>
+  </main>
+  <script src="assets/account.js" defer></script>
+</body>
+</html>

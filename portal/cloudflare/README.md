@@ -139,3 +139,35 @@ Voucher redemption is deliberately disabled until the router arrives and is
 integrated. Creating or recording a voucher does not create a subscription or
 grant network access. A voucher code should not be handed to a customer as
 redeemable until the redemption flow is enabled and tested.
+
+
+## Customer accounts foundation (migration 0008)
+
+The customer-account foundation introduces a separate customer identity model alongside the existing development checkout. It adds password-hashed accounts, hashed opaque session tokens, HttpOnly session cookies, login throttling, and account audit events. The public account page is available at `/account.html`.
+
+The migration also establishes tables for household memberships, access entitlements, guest passes, and network-session tracking. These are schema foundations, not yet an enabled access-control product: household approval endpoints, guest-pass redemption, email verification/recovery, paid-order ownership, and live router session transfer still need implementation and integration tests. Existing orders and subscriptions are retained; their new `customer_id` columns are nullable so this migration does not invent owners for historical records.
+
+A successful customer login revokes the account's prior browser session. The database also has a partial unique index intended to prevent more than one active network session per customer. That index is a safety guard, not a substitute for router-side enforcement. The MikroTik adapter must disconnect the old session and confirm the result before a new one is considered active.
+
+Apply the migration to a disposable local database first, then run:
+
+```sh
+npm test
+```
+
+Do not deploy the customer account page as a production sign-in system until email verification, password recovery, abuse controls, account lifecycle flows, privacy terms, and the household/router authorization endpoints are completed and tested.
+
+
+### Administrator-managed household access
+
+The admin portal's `/admin/households.html` page uses these endpoints:
+
+- `GET /api/admin/customers`: list customer account records without password hashes.
+- `GET /api/admin/households`: list households and active/pending membership counts.
+- `POST /api/admin/households`: create a household for an existing customer; the owner membership is approved immediately.
+- `POST /api/admin/households/:id/members`: add an existing customer as a pending family member.
+- `GET /api/admin/household-memberships`: review membership status.
+- `POST /api/admin/household-memberships/:id/approve`: approve a pending member and create a non-expiring household entitlement.
+- `POST /api/admin/household-memberships/:id/revoke`: revoke the membership and household entitlement.
+
+Every mutating admin endpoint checks the signed administrator session and request origin. Membership changes are recorded in the account audit log. These records do not yet drive live router access; MikroTik enforcement and reconciliation must be completed before free household access is operational.

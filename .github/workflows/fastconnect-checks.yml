@@ -1,0 +1,36 @@
+name: Cloudflare portal checks
+
+on:
+  pull_request:
+    paths:
+      - "portal/cloudflare/**"
+      - "portal/public/**"
+      - ".github/workflows/fastconnect-checks.yml"
+  push:
+    branches: [main]
+    paths:
+      - "portal/cloudflare/**"
+      - "portal/public/**"
+      - ".github/workflows/fastconnect-checks.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: portal/cloudflare/package-lock.json
+      - name: Install dependencies
+        working-directory: portal/cloudflare
+        run: npm ci
+      - name: Run tests
+        working-directory: portal/cloudflare
+        run: npm test

@@ -1327,3 +1327,100 @@ td.muted {
     flex-wrap: wrap;
   }
 }
+
+/* Customer account screens */
+.account-main {
+  padding-bottom: 18px;
+}
+
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.account-card {
+  min-width: 0;
+  padding: 24px;
+}
+
+.account-card h2 {
+  margin-bottom: 8px;
+}
+
+.account-card > .muted {
+  min-height: 44px;
+  margin-bottom: 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.account-current {
+  padding: 24px;
+  margin-bottom: 18px;
+}
+
+.account-current h2 {
+  margin-bottom: 6px;
+}
+
+.account-current .muted {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+
+.account-current .field-hint {
+  display: block;
+  margin: 14px 0 20px;
+  line-height: 1.65;
+}
+
+@media (max-width: 720px) {
+  .account-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .account-card {
+    padding: 20px;
+  }
+
+  .account-card > .muted {
+    min-height: 0;
+  }
+}
+
+
+.button.small {
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.household-admin-panels {
+  margin-bottom: 18px;
+}
+
+.household-table-panel {
+  margin-bottom: 18px;
+}
+
+.household-table-panel .table-wrap {
+  overflow-x: auto;
+}
+
+.household-table-panel table {
+  min-width: 760px;
+}
+
+.household-table-panel .button + .button {
+  margin-left: 5px;
+}
+
+@media (max-width: 600px) {
+  .household-table-panel {
+    padding: 15px;
+  }
+}

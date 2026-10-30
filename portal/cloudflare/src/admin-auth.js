@@ -1068,6 +1068,313 @@ async function cancelAdminVoucher(request, env, db, voucherId) {
   return jsonResponse({ cancelled: true });
 }
 
+
+async function listAdminCustomers(request, env, db) {
+  const admin = await authenticatedAdmin(request, env, db);
+  if (!admin) return jsonResponse({ error: "Sign-in required" }, 401);
+
+  const { results } = await db.prepare(
+    `SELECT id, email, full_name, phone_number, status, email_verified_at, created_at
+     FROM customers
+     ORDER BY created_at DESC, id DESC
+     LIMIT 100`,
+  ).all();
+
+  return jsonResponse({
+    customers: results.map((customer) => ({
+      id: customer.id,
+      email: customer.email,
+      fullName: customer.full_name,
+      phoneNumber: customer.phone_number,
+      status: customer.status,
+      emailVerified: Boolean(customer.email_verified_at),
+      createdAt: customer.created_at,
+    })),
+  });
+}
+
+async function listAdminHouseholds(request, env, db) {
+  const admin = await authenticatedAdmin(request, env, db);
+  if (!admin) return jsonResponse({ error: "Sign-in required" }, 401);
+
+  const { results } = await db.prepare(
+    `SELECT households.id, households.name, households.status, households.created_at,
+            customers.email AS owner_email, customers.full_name AS owner_name,
+            (SELECT COUNT(*) FROM household_memberships
+             WHERE household_id = households.id AND status = 'active') AS active_members,
+            (SELECT COUNT(*) FROM household_memberships
+             WHERE household_id = households.id AND status IN ('pending', 'invited')) AS pending_members
+     FROM households
+     JOIN customers ON customers.id = households.owner_customer_id
+     ORDER BY households.created_at DESC, households.id DESC
+     LIMIT 100`,
+  ).all();
+
+  return jsonResponse({
+    households: results.map((household) => ({
+      id: household.id,
+      name: household.name,
+      status: household.status,
+      owner: { name: household.owner_name, email: household.owner_email },
+      activeMembers: household.active_members,
+      pendingMembers: household.pending_members,
+      createdAt: household.created_at,
+    })),
+  });
+}
+
+async function createAdminHousehold(request, env, db) {
+  if (!hasSameOrigin(request)) return jsonResponse({ error: "Request origin rejected" }, 403);
+  const admin = await authenticatedAdmin(request, env, db);
+  if (!admin) return jsonResponse({ error: "Sign-in required" }, 401);
+
+  const body = await readJson(request);
+  const name = typeof body?.name === "string" ? body.name.trim().replace(/\s+/g, " ") : "";
+  const ownerEmail = typeof body?.ownerEmail === "string" ? body.ownerEmail.trim().toLowerCase() : "";
+  if (name.length < 2 || name.length > 80 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) {
+    return jsonResponse({ error: "Enter a household name and a valid owner email address." }, 400);
+  }
+
+  const owner = await db.prepare(
+    "SELECT id, email FROM customers WHERE email = ? COLLATE NOCASE AND status = 'active'",
+  ).bind(ownerEmail).first();
+  if (!owner) return jsonResponse({ error: "An active customer account with that email was not found." }, 404);
+
+  const householdId = crypto.randomUUID();
+  const membershipId = crypto.randomUUID();
+  const entitlementId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const results = await db.batch([
+    db.prepare(
+      `INSERT INTO households (id, name, owner_customer_id, status, created_by_admin_id, created_at, updated_at)
+       VALUES (?, ?, ?, 'active', ?, ?, ?)`,
+    ).bind(householdId, name, owner.id, admin.id, now, now),
+    db.prepare(
+      `INSERT INTO household_memberships
+         (id, household_id, customer_id, status, approved_by_admin_id, approved_at, created_at, updated_at)
+       SELECT ?, id, owner_customer_id, 'active', ?, ?, ?, ?
+       FROM households WHERE id = ?`,
+    ).bind(membershipId, admin.id, now, now, now, householdId),
+    db.prepare(
+      `INSERT INTO access_entitlements
+         (id, customer_id, entitlement_type, source_id, status, starts_at, expires_at, created_at)
+       SELECT ?, customer_id, 'household', id, 'active', ?, NULL, ?
+       FROM household_memberships WHERE id = ? AND status = 'active'
+       ON CONFLICT(entitlement_type, source_id, customer_id) DO NOTHING`,
+    ).bind(entitlementId, now, now, membershipId),
+    db.prepare(
+      `INSERT INTO account_audit_logs
+         (id, customer_id, actor_type, actor_id, action, details, created_at)
+       VALUES (?, ?, 'admin', ?, 'household_created', ?, ?)`,
+    ).bind(
+      crypto.randomUUID(),
+      owner.id,
+      admin.id,
+      JSON.stringify({ householdId, name, ownerEmail: owner.email }),
+      now,
+    ),
+  ]);
+
+  if (Number(results[0]?.meta?.changes ?? results[0]?.changes ?? 0) !== 1) {
+    throw new Error("Household could not be created");
+  }
+  return jsonResponse({
+    created: true,
+    household: { id: householdId, name, ownerEmail: owner.email },
+    ownerAccess: "approved",
+    message: "Household created. The owner has been approved for unlimited household access.",
+  }, 201);
+}
+
+async function addAdminHouseholdMember(request, env, db, householdId) {
+  if (!hasSameOrigin(request)) return jsonResponse({ error: "Request origin rejected" }, 403);
+  const admin = await authenticatedAdmin(request, env, db);
+  if (!admin) return jsonResponse({ error: "Sign-in required" }, 401);
+
+  const body = await readJson(request);
+  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return jsonResponse({ error: "Enter a valid email address for the family member." }, 400);
+  }
+
+  const customer = await db.prepare(
+    "SELECT id, email FROM customers WHERE email = ? COLLATE NOCASE AND status = 'active'",
+  ).bind(email).first();
+  if (!customer) return jsonResponse({ error: "Create the family member's personal account first." }, 404);
+
+  const membershipId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  let result;
+  try {
+    result = await db.prepare(
+      `INSERT INTO household_memberships
+         (id, household_id, customer_id, status, created_at, updated_at)
+       SELECT ?, households.id, customers.id, 'pending', ?, ?
+       FROM households
+       JOIN customers ON customers.id = ?
+       WHERE households.id = ? AND households.status = 'active'
+         AND customers.status = 'active'`,
+    ).bind(membershipId, now, now, customer.id, householdId).run();
+  } catch (error) {
+    if (String(error?.message ?? "").includes("UNIQUE constraint failed: household_memberships.household_id, household_memberships.customer_id")) {
+      return jsonResponse({ error: "This customer already has a membership in the household." }, 409);
+    }
+    throw error;
+  }
+
+  if (Number(result?.meta?.changes ?? result?.changes ?? 0) !== 1) {
+    return jsonResponse({ error: "Active household not found." }, 404);
+  }
+
+  await db.prepare(
+    `INSERT INTO account_audit_logs
+       (id, customer_id, actor_type, actor_id, action, details, created_at)
+     VALUES (?, ?, 'admin', ?, 'household_member_requested', ?, ?)`,
+  ).bind(
+    crypto.randomUUID(),
+    customer.id,
+    admin.id,
+    JSON.stringify({ householdId, membershipId, email }),
+    now,
+  ).run();
+
+  return jsonResponse({
+    created: true,
+    membership: { id: membershipId, email: customer.email, status: "pending" },
+    message: "Family membership is pending administrator approval.",
+  }, 201);
+}
+
+async function listAdminHouseholdMemberships(request, env, db) {
+  const admin = await authenticatedAdmin(request, env, db);
+  if (!admin) return jsonResponse({ error: "Sign-in required" }, 401);
+
+  const { results } = await db.prepare(
+    `SELECT household_memberships.id, household_memberships.status,
+            household_memberships.created_at, household_memberships.approved_at,
+            households.id AS household_id, households.name AS household_name,
+            customers.id AS customer_id, customers.full_name, customers.email,
+            approver.username AS approved_by
+     FROM household_memberships
+     JOIN households ON households.id = household_memberships.household_id
+     JOIN customers ON customers.id = household_memberships.customer_id
+     LEFT JOIN admins AS approver ON approver.id = household_memberships.approved_by_admin_id
+     ORDER BY CASE household_memberships.status WHEN 'pending' THEN 0 WHEN 'invited' THEN 1 ELSE 2 END,
+              household_memberships.created_at DESC
+     LIMIT 200`,
+  ).all();
+
+  return jsonResponse({
+    memberships: results.map((membership) => ({
+      id: membership.id,
+      status: membership.status,
+      createdAt: membership.created_at,
+      approvedAt: membership.approved_at,
+      approvedBy: membership.approved_by,
+      household: { id: membership.household_id, name: membership.household_name },
+      customer: { id: membership.customer_id, name: membership.full_name, email: membership.email },
+    })),
+  });
+}
+
+async function approveAdminHouseholdMembership(request, env, db, membershipId) {
+  if (!hasSameOrigin(request)) return jsonResponse({ error: "Request origin rejected" }, 403);
+  const admin = await authenticatedAdmin(request, env, db);
+  if (!admin) return jsonResponse({ error: "Sign-in required" }, 401);
+
+  const now = new Date().toISOString();
+  const entitlementId = crypto.randomUUID();
+  const results = await db.batch([
+    db.prepare(
+      `UPDATE household_memberships
+       SET status = 'active', approved_by_admin_id = ?, approved_at = ?, updated_at = ?
+       WHERE id = ? AND status IN ('pending', 'invited')
+         AND EXISTS (SELECT 1 FROM households WHERE id = household_id AND status = 'active')`,
+    ).bind(admin.id, now, now, membershipId),
+    db.prepare(
+      `INSERT INTO access_entitlements
+         (id, customer_id, entitlement_type, source_id, status, starts_at, expires_at, created_at)
+       SELECT ?, household_memberships.customer_id, 'household', household_memberships.id,
+              'active', ?, NULL, ?
+       FROM household_memberships
+       JOIN households ON households.id = household_memberships.household_id
+       WHERE household_memberships.id = ? AND household_memberships.status = 'active'
+         AND households.status = 'active'
+       ON CONFLICT(entitlement_type, source_id, customer_id) DO NOTHING`,
+    ).bind(entitlementId, now, now, membershipId),
+  ]);
+
+  if (Number(results[0]?.meta?.changes ?? results[0]?.changes ?? 0) !== 1) {
+    const membership = await db.prepare(
+      "SELECT status FROM household_memberships WHERE id = ?",
+    ).bind(membershipId).first();
+    return membership
+      ? jsonResponse({ error: "Membership is not pending or its household is unavailable." }, 409)
+      : jsonResponse({ error: "Membership not found." }, 404);
+  }
+
+  const membership = await db.prepare(
+    "SELECT customer_id FROM household_memberships WHERE id = ?",
+  ).bind(membershipId).first();
+  await db.prepare(
+    `INSERT INTO account_audit_logs
+       (id, customer_id, actor_type, actor_id, action, details, created_at)
+     VALUES (?, ?, 'admin', ?, 'household_membership_approved', ?, ?)`,
+  ).bind(
+    crypto.randomUUID(),
+    membership.customer_id,
+    admin.id,
+    JSON.stringify({ membershipId }),
+    now,
+  ).run();
+
+  return jsonResponse({ approved: true, membershipId, access: "unlimited_household" });
+}
+
+async function revokeAdminHouseholdMembership(request, env, db, membershipId) {
+  if (!hasSameOrigin(request)) return jsonResponse({ error: "Request origin rejected" }, 403);
+  const admin = await authenticatedAdmin(request, env, db);
+  if (!admin) return jsonResponse({ error: "Sign-in required" }, 401);
+
+  const now = new Date().toISOString();
+  const result = await db.prepare(
+    `UPDATE household_memberships
+     SET status = 'removed', updated_at = ?
+     WHERE id = ? AND status IN ('active', 'pending', 'invited', 'suspended')`,
+  ).bind(now, membershipId).run();
+  if (Number(result?.meta?.changes ?? result?.changes ?? 0) !== 1) {
+    const membership = await db.prepare(
+      "SELECT id FROM household_memberships WHERE id = ?",
+    ).bind(membershipId).first();
+    return membership
+      ? jsonResponse({ error: "Membership is already removed." }, 409)
+      : jsonResponse({ error: "Membership not found." }, 404);
+  }
+
+  const membership = await db.prepare(
+    "SELECT customer_id FROM household_memberships WHERE id = ?",
+  ).bind(membershipId).first();
+  await db.batch([
+    db.prepare(
+      `UPDATE access_entitlements SET status = 'revoked'
+       WHERE entitlement_type = 'household' AND source_id = ? AND status = 'active'`,
+    ).bind(membershipId),
+    db.prepare(
+      `INSERT INTO account_audit_logs
+         (id, customer_id, actor_type, actor_id, action, details, created_at)
+       VALUES (?, ?, 'admin', ?, 'household_membership_revoked', ?, ?)`,
+    ).bind(
+      crypto.randomUUID(),
+      membership.customer_id,
+      admin.id,
+      JSON.stringify({ membershipId }),
+      now,
+    ),
+  ]);
+
+  return jsonResponse({ revoked: true, membershipId });
+}
+
 export async function handleAdminRequest(request, env, db, pathname) {
   if (!db || typeof db.prepare !== "function") {
     throw new Error("Cloudflare D1 binding DB is unavailable for admin access");
@@ -1087,11 +1394,32 @@ export async function handleAdminRequest(request, env, db, pathname) {
     ["/api/admin/audit", { method: "GET", handler: listAdminAuditLogs }],
     ["/api/admin/plans", { method: "GET", handler: listAdminPlans }],
     ["/api/admin/vouchers", { method: "GET", handler: listAdminVouchers }],
+    ["/api/admin/customers", { method: "GET", handler: listAdminCustomers }],
+    ["/api/admin/households", { method: "GET", handler: listAdminHouseholds }],
+    ["/api/admin/household-memberships", { method: "GET", handler: listAdminHouseholdMemberships }],
   ]);
   const planIdMatch = /^\/api\/admin\/plans\/([a-z0-9]+(?:-[a-z0-9]+)*)$/.exec(pathname);
   const voucherIdMatch = /^\/api\/admin\/vouchers\/([0-9a-f-]{36})\/cancel$/.exec(pathname);
+  const householdMembersMatch = /^\/api\/admin\/households\/([0-9a-f-]{36})\/members$/.exec(pathname);
+  const householdMembershipActionMatch = /^\/api\/admin\/household-memberships\/([0-9a-f-]{36})\/(approve|revoke)$/.exec(pathname);
   const route =
-    pathname === "/api/admin/plans" && request.method === "POST"
+    pathname === "/api/admin/households" && request.method === "POST"
+      ? { method: "POST", handler: createAdminHousehold }
+      : householdMembersMatch
+        ? {
+            method: "POST",
+            handler: (request, requestEnv, requestDb) =>
+              addAdminHouseholdMember(request, requestEnv, requestDb, householdMembersMatch[1]),
+          }
+        : householdMembershipActionMatch
+          ? {
+              method: "POST",
+              handler: (request, requestEnv, requestDb) =>
+                householdMembershipActionMatch[2] === "approve"
+                  ? approveAdminHouseholdMembership(request, requestEnv, requestDb, householdMembershipActionMatch[1])
+                  : revokeAdminHouseholdMembership(request, requestEnv, requestDb, householdMembershipActionMatch[1]),
+            }
+          : pathname === "/api/admin/plans" && request.method === "POST"
       ? { method: "POST", handler: createAdminPlan }
       : pathname === "/api/admin/vouchers" && request.method === "POST"
         ? { method: "POST", handler: createAdminVoucher }

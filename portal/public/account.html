@@ -26,6 +26,11 @@
       <h2 id="account-name"></h2>
       <p id="account-email" class="muted"></p>
       <p class="field-hint">One account can have one active network session at a time. Signing in on another device replaces the previous web login; router session transfer will be enabled after MikroTik integration.</p>
+      <section class="surface account-card" aria-labelledby="my-subscriptions-heading">
+        <h2 id="my-subscriptions-heading">My subscriptions</h2>
+        <p id="subscriptions-message" class="form-message" role="status" aria-live="polite">Loading your subscriptions…</p>
+        <div id="customer-subscriptions" class="table-wrap"></div>
+      </section>
       <button id="account-logout" class="button secondary full" type="button">Sign out</button>
     </section>
 

@@ -6,7 +6,7 @@ import {
   startSandboxPayment,
 } from "./fapshi.js";
 import { expireSubscriptions } from "./subscription-expiry.js";
-import { handleCustomerAuthRequest } from "./customer-auth.js";
+import { getCurrentCustomer, handleCustomerAuthRequest } from "./customer-auth.js";
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
@@ -136,7 +136,7 @@ async function getOrderStatus(reference, macAddress, db) {
   });
 }
 
-async function createPendingOrder(request, db) {
+async function createPendingOrder(request, db, customerId = null) {
   if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get("content-type") ?? "")) {
     return badRequest("Content-Type must be application/json");
   }
@@ -193,15 +193,16 @@ async function createPendingOrder(request, db) {
     db
       .prepare(
         `INSERT INTO orders
-           (id, reference, device_id, plan_id, phone_number, payment_network,
+           (id, reference, customer_id, device_id, plan_id, phone_number, payment_network,
             amount_xaf, status)
-         SELECT ?, ?, id, ?, ?, ?, ?, 'pending'
+         SELECT ?, ?, ?, id, ?, ?, ?, ?, 'pending'
          FROM devices
          WHERE mac_address = ? AND status != 'blocked'`,
       )
       .bind(
         orderId,
         orderReference,
+        customerId,
         plan.id,
         phoneNumber,
         body.paymentNetwork,
@@ -260,6 +261,7 @@ export default {
     const isRouterSimulatorRoute = url.pathname.startsWith("/api/router/commands");
     const isAdminApiRoute = url.pathname.startsWith("/api/admin/");
     const isCustomerApiRoute = url.pathname.startsWith("/api/account/");
+    const isAccountOrdersRoute = url.pathname === "/api/account/orders";
 
     if (isFapshiWebhookRoute) {
       if (request.method !== "POST") {
@@ -270,6 +272,23 @@ export default {
         return await handleFapshiWebhook(request, env, env.DB);
       } catch (error) {
         console.error("Fapshi webhook processing failed:", error);
+        return jsonResponse({ error: "Service temporarily unavailable" }, 503);
+      }
+    }
+
+    if (isAccountOrdersRoute) {
+      if (request.method !== "POST") {
+        return jsonResponse({ error: "Method not allowed" }, 405, { allow: "POST" });
+      }
+      try {
+        await checkDatabase(env.DB);
+        const customer = await getCurrentCustomer(request, env.DB);
+        if (!customer) {
+          return jsonResponse({ error: "Sign in before creating an order." }, 401);
+        }
+        return await createPendingOrder(request, env.DB, customer.id);
+      } catch (error) {
+        console.error("Account checkout request failed:", error);
         return jsonResponse({ error: "Service temporarily unavailable" }, 503);
       }
     }

@@ -355,6 +355,41 @@ async function logout(request, db) {
   return jsonResponse({ loggedOut: true }, 200, { "set-cookie": clearSessionCookie(request) });
 }
 
+async function listCustomerSubscriptions(request, db) {
+  const customer = await getCurrentCustomer(request, db);
+  if (!customer) {
+    return jsonResponse({ error: "Sign in to view your subscriptions." }, 401, {
+      "set-cookie": clearSessionCookie(request),
+    });
+  }
+
+  const { results } = await db.prepare(
+    `SELECT subscriptions.id, subscriptions.status, subscriptions.started_at,
+            subscriptions.expires_at, plans.id AS plan_id, plans.name AS plan_name,
+            plans.days AS plan_days, orders.reference AS order_reference,
+            orders.amount_xaf, orders.created_at AS ordered_at
+     FROM subscriptions
+     JOIN orders ON orders.id = subscriptions.order_id
+     JOIN plans ON plans.id = subscriptions.plan_id
+     WHERE subscriptions.customer_id = ?
+     ORDER BY subscriptions.created_at DESC
+     LIMIT 100`,
+  ).bind(customer.id).all();
+
+  return jsonResponse({
+    subscriptions: results.map((row) => ({
+      id: row.id,
+      status: row.status,
+      startedAt: row.started_at,
+      expiresAt: row.expires_at,
+      plan: { id: row.plan_id, name: row.plan_name, days: row.plan_days },
+      orderReference: row.order_reference,
+      amountXaf: row.amount_xaf,
+      orderedAt: row.ordered_at,
+    })),
+  });
+}
+
 export async function handleCustomerAuthRequest(request, env, db, pathname) {
   if (!db || typeof db.prepare !== "function") {
     throw new Error("Cloudflare D1 binding DB is unavailable for customer accounts");
@@ -364,6 +399,7 @@ export async function handleCustomerAuthRequest(request, env, db, pathname) {
     ["/api/account/register", { method: "POST", handler: register }],
     ["/api/account/login", { method: "POST", handler: login }],
     ["/api/account/session", { method: "GET", handler: session }],
+    ["/api/account/subscriptions", { method: "GET", handler: listCustomerSubscriptions }],
     ["/api/account/logout", { method: "POST", handler: logout }],
   ]);
   const route = routes.get(pathname);

@@ -2263,3 +2263,91 @@ test("admin can create a household and approve a family member's unlimited entit
     database.close();
   }
 });
+
+
+test("customers can view only subscriptions owned by their signed-in account", async () => {
+  const database = await createTestDatabase();
+  const env = { DB: new LocalD1(database) };
+  const origin = "https://app.test";
+
+  try {
+    const register = async (email, fullName) => worker.fetch(
+      new Request(`${origin}/api/account/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin },
+        body: JSON.stringify({
+          fullName,
+          email,
+          password: "customer-test-password-2026",
+        }),
+      }),
+      env,
+    );
+
+    const firstRegister = await register("first@example.com", "First Customer");
+    const secondRegister = await register("second@example.com", "Second Customer");
+    assert.equal(firstRegister.status, 201);
+    assert.equal(secondRegister.status, 201);
+    const firstCustomer = (await firstRegister.json()).customer;
+    const secondCustomer = (await secondRegister.json()).customer;
+
+    await createActiveTestSubscription(database, "FC-CUSTOMER-SUBSCRIPTION");
+    database.prepare(
+      "UPDATE subscriptions SET customer_id = ? WHERE order_id = ?",
+    ).run(firstCustomer.id, "FC-CUSTOMER-SUBSCRIPTION");
+
+    const login = await worker.fetch(
+      new Request(`${origin}/api/account/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin },
+        body: JSON.stringify({
+          email: "first@example.com",
+          password: "customer-test-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+
+    const subscriptionsResponse = await worker.fetch(
+      new Request(`${origin}/api/account/subscriptions`, { headers: { cookie } }),
+      env,
+    );
+    assert.equal(subscriptionsResponse.status, 200);
+    const payload = await subscriptionsResponse.json();
+    assert.equal(payload.subscriptions.length, 1);
+    assert.equal(payload.subscriptions[0].orderReference, "FC-CUSTOMER-SUBSCRIPTION");
+    assert.equal(payload.subscriptions[0].plan.days, 10);
+
+    const unauthorizedResponse = await worker.fetch(
+      new Request(`${origin}/api/account/subscriptions`),
+      env,
+    );
+    assert.equal(unauthorizedResponse.status, 401);
+
+    // A second customer's identity must never affect the first customer's query.
+    assert.notEqual(firstCustomer.id, secondCustomer.id);
+    const secondLogin = await worker.fetch(
+      new Request(`${origin}/api/account/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin },
+        body: JSON.stringify({
+          email: "second@example.com",
+          password: "customer-test-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal(secondLogin.status, 200);
+    const secondCookie = secondLogin.headers.get("set-cookie").split(";")[0];
+    const secondSubscriptions = await worker.fetch(
+      new Request(`${origin}/api/account/subscriptions`, { headers: { cookie: secondCookie } }),
+      env,
+    );
+    assert.equal(secondSubscriptions.status, 200);
+    assert.deepEqual((await secondSubscriptions.json()).subscriptions, []);
+  } finally {
+    database.close();
+  }
+});

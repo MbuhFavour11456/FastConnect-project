@@ -1129,9 +1129,9 @@ async function createAdminHousehold(request, env, db) {
   if (!admin) return jsonResponse({ error: "Sign-in required" }, 401);
 
   const body = await readJson(request);
-  const name = typeof body?.name === "string" ? body.name.trim().replace(/\\s+/g, " ") : "";
+  const name = typeof body?.name === "string" ? body.name.trim().replace(/\s+/g, " ") : "";
   const ownerEmail = typeof body?.ownerEmail === "string" ? body.ownerEmail.trim().toLowerCase() : "";
-  if (name.length < 2 || name.length > 80 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(ownerEmail)) {
+  if (name.length < 2 || name.length > 80 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) {
     return jsonResponse({ error: "Enter a household name and a valid owner email address." }, 400);
   }
 
@@ -1193,7 +1193,7 @@ async function addAdminHouseholdMember(request, env, db, householdId) {
 
   const body = await readJson(request);
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return jsonResponse({ error: "Enter a valid email address for the family member." }, 400);
   }
 

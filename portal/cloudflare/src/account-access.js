@@ -24,6 +24,7 @@ export async function handleAccountAccessRequest(request, db) {
     `SELECT subscriptions.id, subscriptions.status, subscriptions.expires_at,
             plans.name AS plan_name
      FROM subscriptions
+     JOIN plans ON plans.id = subscriptions.plan_id
      WHERE subscriptions.customer_id = ?
        AND subscriptions.status = 'active'
        AND (subscriptions.expires_at IS NULL OR subscriptions.expires_at > ?)
@@ -36,10 +37,11 @@ export async function handleAccountAccessRequest(request, db) {
      FROM access_entitlements
      WHERE customer_id = ?
        AND status = 'active'
+       AND starts_at <= ?
        AND (expires_at IS NULL OR expires_at > ?)
      ORDER BY created_at DESC
      LIMIT 1`,
-  ).bind(customer.id, now).first();
+  ).bind(customer.id, now, now).first();
 
   const hasActiveAccess = Boolean(subscription || entitlement);
   return jsonResponse({

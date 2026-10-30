@@ -156,3 +156,18 @@ npm test
 ```
 
 Do not deploy the customer account page as a production sign-in system until email verification, password recovery, abuse controls, account lifecycle flows, privacy terms, and the household/router authorization endpoints are completed and tested.
+
+
+### Administrator-managed household access
+
+The admin portal's `/admin/households.html` page uses these endpoints:
+
+- `GET /api/admin/customers`: list customer account records without password hashes.
+- `GET /api/admin/households`: list households and active/pending membership counts.
+- `POST /api/admin/households`: create a household for an existing customer; the owner membership is approved immediately.
+- `POST /api/admin/households/:id/members`: add an existing customer as a pending family member.
+- `GET /api/admin/household-memberships`: review membership status.
+- `POST /api/admin/household-memberships/:id/approve`: approve a pending member and create a non-expiring household entitlement.
+- `POST /api/admin/household-memberships/:id/revoke`: revoke the membership and household entitlement.
+
+Every mutating admin endpoint checks the signed administrator session and request origin. Membership changes are recorded in the account audit log. These records do not yet drive live router access; MikroTik enforcement and reconciliation must be completed before free household access is operational.

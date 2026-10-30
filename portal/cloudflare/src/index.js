@@ -6,6 +6,7 @@ import {
   startSandboxPayment,
 } from "./fapshi.js";
 import { expireSubscriptions } from "./subscription-expiry.js";
+import { handleCustomerAuthRequest } from "./customer-auth.js";
 
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
@@ -258,6 +259,7 @@ export default {
     const isFapshiWebhookRoute = url.pathname === "/api/payments/fapshi-webhook";
     const isRouterSimulatorRoute = url.pathname.startsWith("/api/router/commands");
     const isAdminApiRoute = url.pathname.startsWith("/api/admin/");
+    const isCustomerApiRoute = url.pathname.startsWith("/api/account/");
 
     if (isFapshiWebhookRoute) {
       if (request.method !== "POST") {
@@ -268,6 +270,15 @@ export default {
         return await handleFapshiWebhook(request, env, env.DB);
       } catch (error) {
         console.error("Fapshi webhook processing failed:", error);
+        return jsonResponse({ error: "Service temporarily unavailable" }, 503);
+      }
+    }
+
+    if (isCustomerApiRoute) {
+      try {
+        return await handleCustomerAuthRequest(request, env, env.DB, url.pathname);
+      } catch (error) {
+        console.error("Customer account request failed:", error);
         return jsonResponse({ error: "Service temporarily unavailable" }, 503);
       }
     }

@@ -38,7 +38,7 @@ export async function recordVerifiedPaymentResult(db, result, clock = () => new 
   const order = await db
     .prepare(
       `SELECT o.id, o.reference, o.amount_xaf, o.status, o.device_id,
-              o.plan_id, p.days
+              o.customer_id, o.plan_id, p.days
        FROM orders AS o
        JOIN plans AS p ON p.id = o.plan_id
        WHERE o.reference = ?`,
@@ -172,8 +172,8 @@ export async function recordVerifiedPaymentResult(db, result, clock = () => new 
     db
       .prepare(
         `INSERT INTO subscriptions
-           (id, order_id, device_id, plan_id, status, started_at, expires_at)
-         SELECT ?, o.id, o.device_id, o.plan_id, 'active', ?, ?
+           (id, order_id, customer_id, device_id, plan_id, status, started_at, expires_at)
+         SELECT ?, o.id, o.customer_id, o.device_id, o.plan_id, 'active', ?, ?
          FROM orders AS o
          WHERE o.id = ? AND o.status = 'paid'
            AND EXISTS (

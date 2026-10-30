@@ -190,7 +190,7 @@ async function clearLoginFailures(db, key) {
   await db.prepare("DELETE FROM customer_login_attempts WHERE attempt_key = ?").bind(key).run();
 }
 
-async function getCurrentCustomer(request, db) {
+export async function getCurrentCustomer(request, db) {
   const token = readCookie(request, cookieName(request));
   if (!token || !/^[A-Za-z0-9_-]{40,64}$/.test(token)) return null;
 

@@ -139,3 +139,20 @@ Voucher redemption is deliberately disabled until the router arrives and is
 integrated. Creating or recording a voucher does not create a subscription or
 grant network access. A voucher code should not be handed to a customer as
 redeemable until the redemption flow is enabled and tested.
+
+
+## Customer accounts foundation (migration 0008)
+
+The customer-account foundation introduces a separate customer identity model alongside the existing development checkout. It adds password-hashed accounts, hashed opaque session tokens, HttpOnly session cookies, login throttling, and account audit events. The public account page is available at `/account.html`.
+
+The migration also establishes tables for household memberships, access entitlements, guest passes, and network-session tracking. These are schema foundations, not yet an enabled access-control product: household approval endpoints, guest-pass redemption, email verification/recovery, paid-order ownership, and live router session transfer still need implementation and integration tests. Existing orders and subscriptions are retained; their new `customer_id` columns are nullable so this migration does not invent owners for historical records.
+
+A successful customer login revokes the account's prior browser session. The database also has a partial unique index intended to prevent more than one active network session per customer. That index is a safety guard, not a substitute for router-side enforcement. The MikroTik adapter must disconnect the old session and confirm the result before a new one is considered active.
+
+Apply the migration to a disposable local database first, then run:
+
+```sh
+npm test
+```
+
+Do not deploy the customer account page as a production sign-in system until email verification, password recovery, abuse controls, account lifecycle flows, privacy terms, and the household/router authorization endpoints are completed and tested.

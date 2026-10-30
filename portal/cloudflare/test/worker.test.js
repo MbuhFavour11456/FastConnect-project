@@ -119,21 +119,14 @@ async function createActiveTestSubscription(database, reference) {
        VALUES (?, ?, ?, 2000, 'successful', '2026-10-02T12:00:00.000Z')`,
     )
     .run(`payment-${reference}`, `order-${reference}`, `fake-${reference}`);
-  const startedAt = new Date(Date.now() - 60_000).toISOString();
-  const expiresAt = new Date(Date.now() + 10 * 86400000).toISOString();
   database
     .prepare(
       `INSERT INTO subscriptions
          (id, order_id, device_id, plan_id, status, started_at, expires_at)
-       VALUES (?, ?, ?, '10-day', 'active', ?, ?)`,
+       VALUES (?, ?, ?, '10-day', 'active',
+               '2026-10-02T12:00:00.000Z', '2026-10-12T12:00:00.000Z')`,
     )
-    .run(
-      `subscription-${reference}`,
-      `order-${reference}`,
-      `device-${reference}`,
-      startedAt,
-      expiresAt,
-    );
+    .run(`subscription-${reference}`, `order-${reference}`, `device-${reference}`);
   database
     .prepare(
       `INSERT INTO router_commands (id, subscription_id, action, status)
@@ -2501,9 +2494,14 @@ test("account access check allows reconnect only while account access is active"
     await createActiveTestSubscription(database, "FC-RECONNECT-ACTIVE");
     database.prepare(
       `UPDATE subscriptions
-       SET customer_id = ?
+       SET customer_id = ?, started_at = ?, expires_at = ?
        WHERE order_id = (SELECT id FROM orders WHERE reference = ?)`,
-    ).run(customer.id, "FC-RECONNECT-ACTIVE");
+    ).run(
+      customer.id,
+      new Date(Date.now() - 60_000).toISOString(),
+      new Date(Date.now() + 10 * 86400000).toISOString(),
+      "FC-RECONNECT-ACTIVE",
+    );
 
     const activeResponse = await worker.fetch(
       new Request(`${origin}/api/account/access`, { headers: { cookie } }),

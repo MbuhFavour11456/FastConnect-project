@@ -105,6 +105,18 @@ async function setupCheckout() {
 
   const params = new URLSearchParams(window.location.search);
   const requestedPlan = params.get('plan');
+  try {
+    const account = await apiRequest('/api/account/session');
+    if (!account.authenticated) {
+      const returnPath = `${window.location.pathname}${window.location.search}`;
+      window.location.href = `/account.html?next=${encodeURIComponent(returnPath)}`;
+      return;
+    }
+  } catch (error) {
+    setMessage(message, `Could not verify your account session: ${error.message}`, 'error');
+    submit.disabled = true;
+    return;
+  }
   const planId =
     requestedPlan === '10'
       ? '10-day'
@@ -178,7 +190,7 @@ async function setupCheckout() {
     setMessage(message, 'Creating a sandbox order and payment request…');
 
     try {
-      const order = await apiRequest('/api/orders', {
+      const order = await apiRequest('/api/account/orders', {
         method: 'POST',
         body: JSON.stringify({
           planId,

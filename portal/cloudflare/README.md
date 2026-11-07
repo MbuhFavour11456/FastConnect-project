@@ -18,6 +18,35 @@ configuration.
 The portal typography uses a self-hosted Manrope font; its SIL Open Font
 License is included at `portal/public/assets/fonts/OFL-Manrope.txt`.
 
+## Customer email verification and password recovery
+
+The customer account API can send verification and password-reset messages
+through Resend. Configure these Worker secrets before expecting delivery:
+
+```powershell
+npx wrangler secret put RESEND_API_KEY
+npx wrangler secret put EMAIL_FROM
+```
+
+Use a Resend API key and a sender address on a domain that has been verified
+with Resend. The sender value should be a valid mailbox identity such as
+`FastConnect <accounts@your-verified-domain.example>`; do not use a Gmail
+recipient address as the sender unless the provider explicitly verifies and
+permits it. Customer email addresses remain the recipients and are supplied
+when they register or request a password reset.
+
+The verification link expires after 24 hours. Password-reset links expire
+after 30 minutes, are single-use, and successful password resets revoke all
+active customer web sessions. Reset requests use a generic response so the
+API does not disclose whether an email address belongs to an account. Requests
+are rate-limited per email address.
+
+If email secrets are absent or the provider is unavailable, account creation
+still succeeds but no message is delivered. Email verification is currently
+recorded when the link is used; it is not yet a sign-in gate, preserving access
+for existing accounts while the rollout is tested. Configure and test delivery
+with a verified sender before production use.
+
 ## Enabling administrator access
 
 Before deploying admin access, configure two Worker secrets in this directory:

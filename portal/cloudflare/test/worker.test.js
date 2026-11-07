@@ -73,6 +73,7 @@ async function createTestDatabase() {
     "0006_vouchers.sql",
     "0007_subscription_expiry.sql",
     "0008_customer_accounts_households.sql",
+    "0009_customer_email_security.sql",
   ]) {
     const migration = await readFile(
       new URL(`../migrations/${migrationName}`, import.meta.url),

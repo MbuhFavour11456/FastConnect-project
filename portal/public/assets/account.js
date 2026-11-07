@@ -212,4 +212,90 @@ document.querySelector("#account-logout").addEventListener("click", async () => 
   }
 });
 
+
+const forgotPasswordToggle = document.querySelector("#forgot-password-toggle");
+const forgotPasswordForm = document.querySelector("#forgot-password-form");
+const passwordResetForm = document.querySelector("#password-reset-form");
+const queryParams = new URLSearchParams(window.location.search);
+
+async function handleEmailLink() {
+  const verificationToken = queryParams.get("verifyEmail");
+  const resetToken = queryParams.get("resetPassword");
+  const verificationPanel = document.querySelector("#email-verification-panel");
+  const verificationMessage = document.querySelector("#email-verification-message");
+  const resetPanel = document.querySelector("#password-reset-panel");
+
+  if (verificationToken) {
+    verificationPanel.hidden = false;
+    try {
+      const result = await accountApi("/api/account/verify-email", {
+        method: "POST",
+        body: JSON.stringify({ token: verificationToken }),
+      });
+      showMessage(verificationMessage, result.message, "success");
+    } catch (error) {
+      showMessage(verificationMessage, error.message, "error");
+    }
+  }
+
+  if (resetToken) {
+    resetPanel.hidden = false;
+    passwordResetForm.dataset.token = resetToken;
+    document.querySelector("#account-forms").hidden = true;
+    document.querySelector("#account-current").hidden = true;
+  }
+}
+
+forgotPasswordToggle.addEventListener("click", () => {
+  forgotPasswordForm.hidden = !forgotPasswordForm.hidden;
+});
+
+forgotPasswordForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = document.querySelector("#forgot-password-message");
+  const submit = forgotPasswordForm.querySelector('button[type="submit"]');
+  submit.disabled = true;
+  showMessage(message, "Requesting a reset link…");
+  try {
+    const form = new FormData(forgotPasswordForm);
+    const result = await accountApi("/api/account/password-reset/request", {
+      method: "POST",
+      body: JSON.stringify({ email: form.get("email") }),
+    });
+    showMessage(message, result.message, "success");
+    forgotPasswordForm.reset();
+  } catch (error) {
+    showMessage(message, error.message, "error");
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+passwordResetForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = document.querySelector("#password-reset-message");
+  const submit = passwordResetForm.querySelector('button[type="submit"]');
+  submit.disabled = true;
+  showMessage(message, "Updating your password…");
+  try {
+    const form = new FormData(passwordResetForm);
+    await accountApi("/api/account/password-reset/confirm", {
+      method: "POST",
+      body: JSON.stringify({
+        token: passwordResetForm.dataset.token,
+        password: form.get("password"),
+      }),
+    });
+    passwordResetForm.reset();
+    showMessage(message, "Your password has been reset. Please sign in again.", "success");
+    passwordResetForm.hidden = true;
+    document.querySelector("#account-forms").hidden = false;
+  } catch (error) {
+    showMessage(message, error.message, "error");
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+handleEmailLink();
 loadAccountSession();

@@ -40,6 +40,22 @@
       <button id="account-logout" class="button secondary full" type="button">Sign out</button>
     </section>
 
+    <section id="email-verification-panel" class="surface account-card" hidden>
+      <h2>Verify your email</h2>
+      <p id="email-verification-message" class="form-message" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="password-reset-panel" class="surface account-card" hidden>
+      <h2>Choose a new password</h2>
+      <form id="password-reset-form" class="form-stack">
+        <label class="field">New password
+          <input name="password" type="password" autocomplete="new-password" minlength="12" maxlength="256" required>
+        </label>
+        <button class="button full" type="submit">Reset password</button>
+        <p id="password-reset-message" class="form-message" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
     <section id="account-forms" class="account-grid">
       <section class="surface account-card">
         <h2>Welcome back</h2>
@@ -53,6 +69,14 @@
           </label>
           <button class="button full" type="submit">Sign in</button>
           <p id="login-message" class="form-message" role="status" aria-live="polite"></p>
+          <button id="forgot-password-toggle" class="quiet-link" type="button">Forgot password?</button>
+          <form id="forgot-password-form" class="form-stack" hidden>
+            <label class="field">Account email
+              <input name="email" type="email" autocomplete="email" maxlength="254" required>
+            </label>
+            <button class="button secondary full" type="submit">Send reset link</button>
+            <p id="forgot-password-message" class="form-message" role="status" aria-live="polite"></p>
+          </form>
         </form>
       </section>
 
@@ -80,7 +104,7 @@
     </section>
 
     <div class="inline-note">
-      <span><strong>Development feature:</strong> account creation and sign-in are being introduced in stages. Email verification, password recovery, household approval, and live router access must be configured and tested before this can be used as a production service.</span>
+      <span><strong>Development feature:</strong> account creation and sign-in are being introduced in stages. Household approval and live router access still require configuration and testing before production use.</span>
     </div>
   </main>
   <script src="assets/account.js" defer></script>

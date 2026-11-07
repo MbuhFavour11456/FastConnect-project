@@ -568,10 +568,10 @@ export async function handleCustomerAuthRequest(request, env, db, pathname) {
     ["/api/account/verify-email", { method: "POST", handler: verifyEmail }],
     ["/api/account/password-reset/request", { method: "POST", handler: requestPasswordReset }],
     ["/api/account/password-reset/confirm", { method: "POST", handler: resetPassword }],
-    ["/api/account/login", { method: "POST", handler: login }],
-    ["/api/account/session", { method: "GET", handler: session }],
-    ["/api/account/subscriptions", { method: "GET", handler: listCustomerSubscriptions }],
-    ["/api/account/logout", { method: "POST", handler: logout }],
+    ["/api/account/login", { method: "POST", handler: (request, _env, db) => login(request, db) }],
+    ["/api/account/session", { method: "GET", handler: (request, _env, db) => session(request, db) }],
+    ["/api/account/subscriptions", { method: "GET", handler: (request, _env, db) => listCustomerSubscriptions(request, db) }],
+    ["/api/account/logout", { method: "POST", handler: (request, _env, db) => logout(request, db) }],
   ]);
   const route = routes.get(pathname);
   if (!route) return jsonResponse({ error: "Not found" }, 404);

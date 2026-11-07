@@ -280,12 +280,18 @@ async function issueEmailToken(request, env, db, customer, purpose) {
     ? "Use this link to verify your FastConnect email address."
     : "Use this link to choose a new FastConnect password.";
   const expiry = purpose === "verify_email" ? "24 hours" : "30 minutes";
-  const delivered = await sendSecurityEmail(
-    env,
-    customer.email,
-    subject,
-    `${instruction}\n\n${link.toString()}\n\nThis link expires in ${expiry}. If you did not request this, you can ignore this email.`,
-  );
+  let delivered = false;
+  try {
+    delivered = await sendSecurityEmail(
+      env,
+      customer.email,
+      subject,
+      `${instruction}\n\n${link.toString()}\n\nThis link expires in ${expiry}. If you did not request this, you can ignore this email.`,
+    );
+  } catch {
+    // The account/token remain valid; email can be retried after provider recovery.
+    delivered = false;
+  }
   return { delivered };
 }
 
@@ -307,10 +313,14 @@ async function verifyEmail(request, _env, db) {
   ).bind(tokenHash, now).first();
   if (!record) return jsonResponse({ error: "This verification link is invalid or expired." }, 400);
 
+  const consumed = await db.prepare(
+    "UPDATE customer_email_tokens SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at > ?",
+  ).bind(now, record.id, now).run();
+  if (consumed.meta?.changes !== 1) {
+    return jsonResponse({ error: "This verification link is invalid or expired." }, 400);
+  }
+
   await db.batch([
-    db.prepare(
-      "UPDATE customer_email_tokens SET used_at = ? WHERE id = ? AND used_at IS NULL",
-    ).bind(now, record.id),
     db.prepare(
       "UPDATE customers SET email_verified_at = ?, updated_at = ? WHERE id = ?",
     ).bind(now, now, record.customer_id),
@@ -360,10 +370,14 @@ async function resetPassword(request, _env, db) {
   if (!record) return jsonResponse({ error: "This reset link is invalid or expired." }, 400);
 
   const passwordHash = await createPasswordHash(password);
+  const consumed = await db.prepare(
+    "UPDATE customer_email_tokens SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at > ?",
+  ).bind(now, record.id, now).run();
+  if (consumed.meta?.changes !== 1) {
+    return jsonResponse({ error: "This reset link is invalid or expired." }, 400);
+  }
+
   await db.batch([
-    db.prepare(
-      "UPDATE customer_email_tokens SET used_at = ? WHERE id = ? AND used_at IS NULL",
-    ).bind(now, record.id),
     db.prepare(
       "UPDATE customers SET password_hash = ?, updated_at = ? WHERE id = ?",
     ).bind(passwordHash, now, record.customer_id),

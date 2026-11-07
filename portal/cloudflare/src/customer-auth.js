@@ -339,6 +339,16 @@ async function requestPasswordReset(request, env, db) {
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   if (!validEmail(email)) return jsonResponse({ error: "Enter a valid email address." }, 400);
 
+  const attemptKey = `password-reset:${email}`;
+  const nowDate = new Date();
+  if (await isRateLimited(db, attemptKey, nowDate)) {
+    return jsonResponse({
+      accepted: true,
+      message: "If an active account exists for that address, password-reset instructions will be sent.",
+    });
+  }
+  await recordLoginFailure(db, attemptKey, nowDate);
+
   const customer = await db.prepare(
     "SELECT id, email FROM customers WHERE email = ? COLLATE NOCASE AND status = 'active'",
   ).bind(email).first();

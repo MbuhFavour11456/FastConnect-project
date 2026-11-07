@@ -2531,3 +2531,164 @@ test("account access check allows reconnect only while account access is active"
     database.close();
   }
 });
+
+
+test("email verification and password reset use expiring one-time tokens and revoke sessions", async () => {
+  const database = await createTestDatabase();
+  const origin = "https://app.test";
+  const env = {
+    DB: new LocalD1(database),
+    RESEND_API_KEY: "test-resend-key",
+    EMAIL_FROM: "FastConnect Test <test@example.com>",
+  };
+  const originalFetch = globalThis.fetch;
+  const deliveredMessages = [];
+
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, "https://api.resend.com/emails");
+    assert.equal(options.headers.authorization, "Bearer test-resend-key");
+    deliveredMessages.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({ id: "test-email-id" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  };
+
+  try {
+    const registration = await worker.fetch(
+      new Request(`${origin}/api/account/register`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          fullName: "Email Test Customer",
+          email: "email-test@example.com",
+          password: "customer-test-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal(registration.status, 201);
+    assert.equal((await registration.json()).emailVerification, "sent");
+    assert.equal(deliveredMessages.length, 1);
+    assert.match(deliveredMessages[0].subject, /verify/i);
+    assert.equal(database.prepare("SELECT email_verified_at FROM customers").get().email_verified_at, null);
+
+    const verificationToken = new URL(
+      deliveredMessages[0].text.match(/https:\/\/[^\s]+/)[0],
+    ).searchParams.get("verifyEmail");
+    assert.ok(verificationToken);
+    const verify = () => worker.fetch(
+      new Request(`${origin}/api/account/verify-email`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({ token: verificationToken }),
+      }),
+      env,
+    );
+    assert.equal((await verify()).status, 200);
+    assert.ok(database.prepare("SELECT email_verified_at FROM customers").get().email_verified_at);
+    assert.equal((await verify()).status, 400);
+
+    const login = await worker.fetch(
+      new Request(`${origin}/api/account/login`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "email-test@example.com",
+          password: "customer-test-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal(login.status, 200);
+    const sessionCookie = login.headers.get("set-cookie").split(";")[0];
+
+    const requestReset = await worker.fetch(
+      new Request(`${origin}/api/account/password-reset/request`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({ email: "email-test@example.com" }),
+      }),
+      env,
+    );
+    assert.equal(requestReset.status, 200);
+    assert.equal(deliveredMessages.length, 2);
+    assert.match(deliveredMessages[1].subject, /reset/i);
+
+    const resetToken = new URL(
+      deliveredMessages[1].text.match(/https:\/\/[^\s]+/)[0],
+    ).searchParams.get("resetPassword");
+    assert.ok(resetToken);
+    const reset = () => worker.fetch(
+      new Request(`${origin}/api/account/password-reset/confirm`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          token: resetToken,
+          password: "new-customer-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal((await reset()).status, 200);
+    assert.equal((await reset()).status, 400);
+
+    const oldSession = await worker.fetch(
+      new Request(`${origin}/api/account/session`, { headers: { cookie: sessionCookie } }),
+      env,
+    );
+    assert.equal((await oldSession.json()).authenticated, false);
+
+    const oldPasswordLogin = await worker.fetch(
+      new Request(`${origin}/api/account/login`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "email-test@example.com",
+          password: "customer-test-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal(oldPasswordLogin.status, 401);
+
+    const newPasswordLogin = await worker.fetch(
+      new Request(`${origin}/api/account/login`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({
+          email: "email-test@example.com",
+          password: "new-customer-password-2026",
+        }),
+      }),
+      env,
+    );
+    assert.equal(newPasswordLogin.status, 200);
+  } finally {
+    globalThis.fetch = originalFetch;
+    database.close();
+  }
+});
+
+test("password reset response does not disclose whether an account exists", async () => {
+  const database = await createTestDatabase();
+  const env = { DB: new LocalD1(database) };
+  const origin = "https://app.test";
+  try {
+    const response = await worker.fetch(
+      new Request(`${origin}/api/account/password-reset/request`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json" },
+        body: JSON.stringify({ email: "missing@example.com" }),
+      }),
+      env,
+    );
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      accepted: true,
+      message: "If an active account exists for that address, password-reset instructions will be sent.",
+    });
+  } finally {
+    database.close();
+  }
+});

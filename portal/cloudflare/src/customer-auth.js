@@ -222,7 +222,164 @@ export async function getCurrentCustomer(request, db) {
   };
 }
 
-async function register(request, db) {
+
+const EMAIL_TOKEN_SECONDS = {
+  verify_email: 60 * 60 * 24,
+  password_reset: 60 * 30,
+};
+
+function createOpaqueToken() {
+  return encodeBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+}
+
+async function sendSecurityEmail(env, to, subject, text) {
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return false;
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ from: env.EMAIL_FROM, to: [to], subject, text }),
+  });
+  if (!response.ok) {
+    // Do not log provider response bodies: they may contain personal data.
+    throw new Error(`Transactional email delivery failed with status ${response.status}`);
+  }
+  return true;
+}
+
+async function issueEmailToken(request, env, db, customer, purpose) {
+  const token = createOpaqueToken();
+  const tokenHash = await digest(token);
+  const now = new Date();
+  const expiresAt = new Date(
+    now.getTime() + EMAIL_TOKEN_SECONDS[purpose] * 1000,
+  ).toISOString();
+  const nowIso = now.toISOString();
+
+  await db.prepare(
+    `UPDATE customer_email_tokens
+     SET used_at = ?
+     WHERE customer_id = ? AND purpose = ? AND used_at IS NULL`,
+  ).bind(nowIso, customer.id, purpose).run();
+
+  await db.prepare(
+    `INSERT INTO customer_email_tokens
+       (id, customer_id, purpose, token_hash, expires_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).bind(crypto.randomUUID(), customer.id, purpose, tokenHash, expiresAt, nowIso).run();
+
+  const link = new URL("/account.html", request.url);
+  link.searchParams.set(purpose === "verify_email" ? "verifyEmail" : "resetPassword", token);
+  const subject = purpose === "verify_email"
+    ? "Verify your FastConnect email"
+    : "Reset your FastConnect password";
+  const instruction = purpose === "verify_email"
+    ? "Use this link to verify your FastConnect email address."
+    : "Use this link to choose a new FastConnect password.";
+  const expiry = purpose === "verify_email" ? "24 hours" : "30 minutes";
+  const delivered = await sendSecurityEmail(
+    env,
+    customer.email,
+    subject,
+    `${instruction}\n\n${link.toString()}\n\nThis link expires in ${expiry}. If you did not request this, you can ignore this email.`,
+  );
+  return { delivered };
+}
+
+async function verifyEmail(request, _env, db) {
+  if (!hasSameOrigin(request)) return jsonResponse({ error: "Request origin rejected" }, 403);
+  const body = await readJson(request);
+  const token = body?.token;
+  if (typeof token !== "string" || !/^[A-Za-z0-9_-]{40,64}$/.test(token)) {
+    return jsonResponse({ error: "This verification link is invalid or expired." }, 400);
+  }
+
+  const tokenHash = await digest(token);
+  const now = new Date().toISOString();
+  const record = await db.prepare(
+    `SELECT customer_email_tokens.id, customer_email_tokens.customer_id
+     FROM customer_email_tokens
+     WHERE token_hash = ? AND purpose = 'verify_email'
+       AND used_at IS NULL AND expires_at > ?`,
+  ).bind(tokenHash, now).first();
+  if (!record) return jsonResponse({ error: "This verification link is invalid or expired." }, 400);
+
+  await db.batch([
+    db.prepare(
+      "UPDATE customer_email_tokens SET used_at = ? WHERE id = ? AND used_at IS NULL",
+    ).bind(now, record.id),
+    db.prepare(
+      "UPDATE customers SET email_verified_at = ?, updated_at = ? WHERE id = ?",
+    ).bind(now, now, record.customer_id),
+    db.prepare(
+      `INSERT INTO account_audit_logs
+       (id, customer_id, actor_type, actor_id, action, details, created_at)
+       VALUES (?, ?, 'customer', ?, 'email_verified', '{}', ?)`,
+    ).bind(crypto.randomUUID(), record.customer_id, record.customer_id, now),
+  ]);
+  return jsonResponse({ verified: true, message: "Your email address has been verified." });
+}
+
+async function requestPasswordReset(request, env, db) {
+  if (!hasSameOrigin(request)) return jsonResponse({ error: "Request origin rejected" }, 403);
+  const body = await readJson(request);
+  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+  if (!validEmail(email)) return jsonResponse({ error: "Enter a valid email address." }, 400);
+
+  const customer = await db.prepare(
+    "SELECT id, email FROM customers WHERE email = ? COLLATE NOCASE AND status = 'active'",
+  ).bind(email).first();
+  if (customer) {
+    await issueEmailToken(request, env, db, customer, "password_reset");
+  }
+  return jsonResponse({
+    accepted: true,
+    message: "If an active account exists for that address, password-reset instructions will be sent.",
+  });
+}
+
+async function resetPassword(request, _env, db) {
+  if (!hasSameOrigin(request)) return jsonResponse({ error: "Request origin rejected" }, 403);
+  const body = await readJson(request);
+  const token = body?.token;
+  const password = body?.password;
+  if (typeof token !== "string" || !/^[A-Za-z0-9_-]{40,64}$/.test(token) || !validPassword(password)) {
+    return jsonResponse({ error: "The reset link or new password is invalid." }, 400);
+  }
+
+  const tokenHash = await digest(token);
+  const now = new Date().toISOString();
+  const record = await db.prepare(
+    `SELECT id, customer_id FROM customer_email_tokens
+     WHERE token_hash = ? AND purpose = 'password_reset'
+       AND used_at IS NULL AND expires_at > ?`,
+  ).bind(tokenHash, now).first();
+  if (!record) return jsonResponse({ error: "This reset link is invalid or expired." }, 400);
+
+  const passwordHash = await createPasswordHash(password);
+  await db.batch([
+    db.prepare(
+      "UPDATE customer_email_tokens SET used_at = ? WHERE id = ? AND used_at IS NULL",
+    ).bind(now, record.id),
+    db.prepare(
+      "UPDATE customers SET password_hash = ?, updated_at = ? WHERE id = ?",
+    ).bind(passwordHash, now, record.customer_id),
+    db.prepare(
+      "UPDATE customer_sessions SET revoked_at = ? WHERE customer_id = ? AND revoked_at IS NULL",
+    ).bind(now, record.customer_id),
+    db.prepare(
+      `INSERT INTO account_audit_logs
+       (id, customer_id, actor_type, actor_id, action, details, created_at)
+       VALUES (?, ?, 'customer', ?, 'password_reset', '{}', ?)`,
+    ).bind(crypto.randomUUID(), record.customer_id, record.customer_id, now),
+  ]);
+  return jsonResponse({ reset: true, signInRequired: true });
+}
+
+async function register(request, env, db) {
   if (!hasSameOrigin(request)) return jsonResponse({ error: "Request origin rejected" }, 403);
   const body = await readJson(request);
   const fullName = normalizeName(body?.fullName);
@@ -267,10 +424,21 @@ async function register(request, db) {
      VALUES (?, ?, 'customer', ?, 'account_registered', ?, ?)`,
   ).bind(crypto.randomUUID(), customerId, customerId, JSON.stringify({ email }), now).run();
 
+  const emailDelivery = await issueEmailToken(
+    request,
+    env,
+    db,
+    { id: customerId, email },
+    "verify_email",
+  );
+
   return jsonResponse({
     created: true,
     customer: { id: customerId, email, fullName, phoneNumber: phoneNumber || null },
-    message: "Account created. Email verification and password recovery must be configured before production launch.",
+    emailVerification: emailDelivery.delivered ? "sent" : "not_configured",
+    message: emailDelivery.delivered
+      ? "Account created. Check your inbox for an email verification link."
+      : "Account created. Email delivery is not configured yet, so verification email was not sent.",
   }, 201);
 }
 
@@ -397,6 +565,9 @@ export async function handleCustomerAuthRequest(request, env, db, pathname) {
 
   const routes = new Map([
     ["/api/account/register", { method: "POST", handler: register }],
+    ["/api/account/verify-email", { method: "POST", handler: verifyEmail }],
+    ["/api/account/password-reset/request", { method: "POST", handler: requestPasswordReset }],
+    ["/api/account/password-reset/confirm", { method: "POST", handler: resetPassword }],
     ["/api/account/login", { method: "POST", handler: login }],
     ["/api/account/session", { method: "GET", handler: session }],
     ["/api/account/subscriptions", { method: "GET", handler: listCustomerSubscriptions }],
@@ -410,5 +581,5 @@ export async function handleCustomerAuthRequest(request, env, db, pathname) {
 
   const health = await db.prepare("SELECT 1 AS ok").first();
   if (health?.ok !== 1) throw new Error("D1 health check failed");
-  return route.handler(request, db);
+  return route.handler(request, env, db);
 }
